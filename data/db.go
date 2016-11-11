@@ -1,0 +1,77 @@
+package data
+
+import (
+	"database/sql"
+	"logging"
+	"sync"
+)
+
+type LocationDb struct {
+	SqlDb *sql.DB
+}
+
+var InitUpdateMutex *sync.Mutex = &sync.Mutex{}
+
+func Open(driverName string, dataSourceName string) (*LocationDb, error) {
+	sqlDb, err := sql.Open(driverName, dataSourceName)
+	if err != nil {
+		return nil, err
+	}
+	return &LocationDb{sqlDb}, nil
+}
+
+func (db *LocationDb) Init(filename string, logger logging.Logger) (bool, error) {
+	InitUpdateMutex.Lock()
+	defer InitUpdateMutex.Unlock()
+	
+	alreadyInitialized, err := db.IsInitialized()
+	if err != nil {
+		return false, err
+	}
+	
+	if alreadyInitialized {
+		logger.Infof("Database is already initialized")
+		return false, nil
+	}
+	
+	logger.Infof("Initializing database from cached file...")
+	
+	ms := FetchFromFile(filename)
+	
+	err = db.transaction(func (tx *sql.Tx) error {
+		if err := InitTables(tx, logger); err != nil {
+			return err
+		}
+		if err := InsertMovies(tx, ms, logger); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (db *LocationDb) transaction(callback func (*sql.Tx) error) error {
+	tx, err := db.SqlDb.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	
+	if err := callback(tx); err != nil {
+		return err
+	}
+	
+	return tx.Commit()
+}
+
+func (db *LocationDb) IsInitialized() (bool, error) {
+	rows, err := db.SqlDb.Query("SHOW TABLES")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	return rows.Next(), rows.Err()
+}
