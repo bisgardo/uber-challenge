@@ -92,7 +92,7 @@ func root(w http.ResponseWriter, r *http.Request) {
 func renderMovies(w http.ResponseWriter, logger logging.Logger) error {
 	recordingLogger.Infof("Rendering movie list page")
 	
-	ms, initialized, err := db.LoadMovies(JsonFileName(), logger)
+	ms, initialized, err := db.LoadMovies(JsonFileName(), logger, true)
 	if initialized {
 		recordInitUpdate(err)
 	}

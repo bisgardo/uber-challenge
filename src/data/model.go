@@ -172,7 +172,7 @@ func InsertMovies(tx *sql.Tx, ms []Movie, logger logging.Logger) error {
 	return nil
 }
 
-func (db *LocationDb) LoadMovies(filename string, logger logging.Logger) (*[]Movie, bool, error) {
+func (db *LocationDb) LoadMovies(filename string, logger logging.Logger, optimize bool) (*[]Movie, bool, error) {
 	// Check if database is initialized and load from file if it isn't.
 	initialized, err := db.Init(filename, logger)
 	if err != nil {
@@ -206,14 +206,22 @@ func (db *LocationDb) LoadMovies(filename string, logger logging.Logger) (*[]Mov
 		}
 		
 		// TODO Set capacity of `ms`.
-		// TODO (Optionally) optimize by querying *all* locations and insert based on the map...
 		
-		for mId, m := range idMovieMap {
-			if err := loadLocations(tx, mId, &m.Locations, logger); err != nil {
+		if optimize {
+			if err := LoadAllLocations(tx, idMovieMap, logger); err != nil {
 				return err
 			}
-			
-			ms = append(ms, *m)
+			for _, m := range idMovieMap {
+				ms = append(ms, *m)
+			}
+		} else {
+			for mId, m := range idMovieMap {
+				if err := LoadLocations(tx, mId, &m.Locations, logger); err != nil {
+					return err
+				}
+				
+				ms = append(ms, *m)
+			}
 		}
 		
 		return nil
@@ -223,7 +231,7 @@ func (db *LocationDb) LoadMovies(filename string, logger logging.Logger) (*[]Mov
 	return &ms, initialized, err
 }
 
-func loadLocations(tx *sql.Tx, mId int64, ls *[]Location, logger logging.Logger) error {
+func LoadLocations(tx *sql.Tx, mId int64, ls *[]Location, logger logging.Logger) error {
 	logger.Debugf("Querying locations for movie %d", mId)
 	
 	rows, err := tx.Query("SELECT * FROM locations AS l WHERE l.movie_id = ?", mId)
@@ -240,6 +248,29 @@ func loadLocations(tx *sql.Tx, mId int64, ls *[]Location, logger logging.Logger)
 		}
 		
 		*ls = append(*ls, l)
+		return nil
+	})
+}
+
+func LoadAllLocations(tx *sql.Tx, idMovieMap map[int64]*Movie, logger logging.Logger) error {
+	logger.Debugf("Querying all locations")
+	
+	rows, err := tx.Query("SELECT * FROM locations")
+	if err != nil {
+		return err
+	}
+	
+	return ForEachRow(rows, func (rows *sql.Rows) error {
+		var lId int64
+		var mId int64
+		var l Location
+		err := rows.Scan(&lId, &mId, &l.Name, &l.FunFact)
+		if err != nil {
+			return err
+		}
+		
+		m := idMovieMap[mId]
+		m.Locations = append(m.Locations, l)
 		return nil
 	})
 }
