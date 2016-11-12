@@ -85,6 +85,7 @@ func root(w http.ResponseWriter, r *http.Request) {
 	defer recordingLogger.Clear()
 	
 	if err := renderMovies(w, &recordingLogger); err != nil {
+		ctx.Errorf(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -120,14 +121,17 @@ func renderMovies(w http.ResponseWriter, logger logging.Logger) error {
 }
 
 func update(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+	
 	if r.Method != "POST" {
-		http.Error(w, "Cannot " + r.Method + " '/load'", http.StatusMethodNotAllowed)
+		errMsg := "Cannot " + r.Method + " '/update'"
+		ctx.Errorf(errMsg)
+		http.Error(w, errMsg, http.StatusMethodNotAllowed)
 		return
 	}
 	
 	// TODO Need to add timestamp(s) to DB for locking to work across instances.
 	
-	ctx := appengine.NewContext(r)
 	recordingLogger.Wrap(ctx)
 	defer recordingLogger.Unwrap()
 	
@@ -143,6 +147,7 @@ func update(w http.ResponseWriter, r *http.Request) {
 	recordInitUpdate(err)
 	
 	if err != nil {
+		ctx.Errorf(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -156,6 +161,8 @@ func update(w http.ResponseWriter, r *http.Request) {
 
 func status(w http.ResponseWriter, r *http.Request) {
 	if err := renderStatus(w, r); err != nil {
+		ctx := appengine.NewContext(r)
+		ctx.Errorf(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
