@@ -42,7 +42,7 @@ func (db *LocationDb) Init(filename string, logger logging.Logger) (bool, error)
 		if err := InitTables(tx, logger); err != nil {
 			return err
 		}
-		if err := InsertMovies(tx, ms, logger); err != nil {
+		if err := InsertMoviesOptimized(tx, ms, logger); err != nil {
 			return err
 		}
 		return nil

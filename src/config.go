@@ -3,7 +3,7 @@ package uber_challenge
 import "io/ioutil"
 
 func JsonFileName() string {
-	return "wwmu-gmzc.json";
+	return "res/data/wwmu-gmzc.json";
 }
 
 func ServiceUrl() string {
