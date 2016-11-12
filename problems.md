@@ -36,10 +36,12 @@ Problems and solutions
     **Solution** Use the log recorder mentioned above and dump it into the HTML.
 
 5.  SQL queries were hopelessly slow. From the dumped log, it appeared that we were only doing 2-4 queries (both
-    insertion and select) per second.
+    insertion and select) per second. This caused timeouts because the app couldn't update the database in within the
+    60 sec time limit enforced by App Engine.
     
-    **Solution attempt** The cause of this is unknown, but an attempt will be made to make fewer queries by bulking them
-    together.
+    **Solution** The cause of the high latency is unknown, but might just be inherent to the Cloud-based architecture.
+    At any rate, bulking insertions together (at the cost of slightly increased code complexity) improved performance
+    tremendously. The same is the case with selections, and all operations now complete in a at most a few seconds.
 
 ### Go
 

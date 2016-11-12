@@ -2,6 +2,7 @@ package data
 
 import (
 	"src/logging"
+	"src/watch"
 	"sort"
 	"database/sql"
 	"fmt"
@@ -261,7 +262,7 @@ func escapeSingleQuotes(s string) string {
 }
 
 func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) error {
-	// TODO Time queries.
+	sw := watch.NewStopWatch()
 	
 	// Batch insert movies.
 	insertMoviesVals := ""
@@ -283,10 +284,11 @@ func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) er
 	}
 	
 	insertMoviesStmt := "INSERT INTO movies VALUES" + insertMoviesVals
-	logger.Debugf("Inserting %d movies", len(ms))
+	//logger.Debugf("Executing query %s", insertMoviesStmt)
 	if _, err := tx.Exec(insertMoviesStmt); err != nil {
 		return err
 	}
+	logger.Infof("Inserted %d movies in %d ms", len(ms), sw.ElapsedTimeMillis(true))
 	
 	// Query movies in order to get their IDs.
 	movieTitleIdMap, err := movieTitleIdMap(tx)
@@ -319,11 +321,12 @@ func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) er
 	}
 	
 	insertLocationsStmt := "INSERT INTO locations VALUES" + insertLocationsVals
-	logger.Debugf("Inserting %d locations", locationCount)
-	logger.Debugf("Executing query %s", insertLocationsStmt)
+	//logger.Debugf("Executing query %s", insertLocationsStmt)
 	if _, err := tx.Exec(insertLocationsStmt); err != nil {
 		return err
 	}
+	
+	logger.Infof("Inserted %d locations in %d ms", locationCount, sw.ElapsedTimeMillis(true))
 	
 	// Bulk insert actors.
 	
@@ -345,11 +348,11 @@ func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) er
 	}
 	
 	insertActorsStmt := "INSERT INTO actors VALUES" + insertActorsVals
-	logger.Debugf("Inserting %d actors", len(as))
-	logger.Debugf("Executing query %s", insertActorsStmt)
+	//logger.Debugf("Executing query %s", insertActorsStmt)
 	if _, err := tx.Exec(insertActorsStmt); err != nil {
 		return err
 	}
+	logger.Infof("Inserted %d actors in %d ms", len(as), sw.ElapsedTimeMillis(true))
 	
 	// Query actors in order to get their IDs.
 	actorIdMap, err := actorIdMap(tx)
@@ -375,11 +378,13 @@ func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) er
 	}
 	
 	insertMovieActorStmt := "INSERT INTO movies_actors VALUES" + insertMovieActorVals
-	logger.Debugf("Inserting %d movie-actor relations", movieActorCount)
-	logger.Debugf("Executing query %s", insertMovieActorStmt)
+	//logger.Debugf("Executing query %s", insertMovieActorStmt)
 	if _, err := tx.Exec(insertMovieActorStmt); err != nil {
 		return err
 	}
+	logger.Infof("Inserted %d movie-actor relations in %d ms", movieActorCount, sw.ElapsedTimeMillis(true))
+	
+	logger.Infof("Updated database in %d ms", sw.TotalElapsedTimeMillis())
 	
 	return nil
 }

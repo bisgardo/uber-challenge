@@ -3,6 +3,7 @@ package uber_challenge
 import (
 	"src/data"
 	"src/logging"
+	"src/watch"
 	"net/http"
 	"html/template"
 	"strings"
@@ -139,7 +140,6 @@ func update(w http.ResponseWriter, r *http.Request) {
 	defer data.InitUpdateMutex.Unlock()
 	
 	logger := &recordingLogger
-	logger.Infof("Update started")
 	
 	ms := data.FetchFromUrl(ServiceUrl(), ctx, logger)
 	err := data.StoreMovies(db, ms, logger)
@@ -153,8 +153,6 @@ func update(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// TODO Fetch geo locations and movie data.
-	
-	logger.Infof("Update completed")
 	
 	http.Redirect(w, r, "", http.StatusFound)
 }
@@ -174,7 +172,7 @@ func renderStatus(w http.ResponseWriter, r *http.Request) error {
 	
 	recordingLogger.Infof("Rendering status page")
 	
-	sw := NewStopWatch()
+	sw := watch.NewStopWatch()
 	
 	mc := 0
 	ac := 0

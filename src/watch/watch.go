@@ -1,4 +1,4 @@
-package uber_challenge
+package watch
 
 import "time"
 

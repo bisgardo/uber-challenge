@@ -16,7 +16,8 @@ first experience with both of these technologies.
 
 The data is stored in a MySQL database, which on the App Engine is called Cloud SQL.
 
-The project is developed with Go App Engine v. 1.9.40 (which includes Go v. 1.6.2) and MySQL 5.7.16.
+During development, Go App Engine SDK 1.9.40 (which includes Go 1.6.2) and MySQL 5.7.16 were used. At the time of this
+writing, Cloud SQL is based on MySQL 5.7.
 
 Currently, the only part of the application that has been implemented (and only partially), is the part of the backend
 that initializes and updates the movie data.
