@@ -1,12 +1,12 @@
 package uber_challenge
 
 import (
-	"data"
+	"src/data"
+	"src/logging"
 	"net/http"
 	"html/template"
 	"strings"
 	"appengine"
-	"logging"
 	"time"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -269,7 +269,7 @@ var listTemplate = template.Must(
 		"parenthesize": func(s string) string {
 			return "(" + s + ")"
 		},
-	}).ParseFiles("list.tpl"),
+	}).ParseFiles("res/tpl/list.tpl"),
 )
 
-var statusTemplate = template.Must(template.ParseFiles("status.tpl"))
+var statusTemplate = template.Must(template.ParseFiles("res/tpl/status.tpl"))

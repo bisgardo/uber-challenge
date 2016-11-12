@@ -1,9 +1,9 @@
 package data
 
 import (
+	"src/logging"
 	"sort"
 	"database/sql"
-	"logging"
 )
 
 func InitTables(tx *sql.Tx, logger logging.Logger) error {

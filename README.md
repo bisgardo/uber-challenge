@@ -42,6 +42,13 @@ The tables sizes of the SQL database and the log/error of the last (re)initializ
 5.  After changing the `application` field of `app.yaml` to the ID of your project, deploy the app using the local
     command `goapp deploy`, executed from the root directory of the project.
 
+Running locally:
+
+*   Install a MySQL server (the project was developed with version 5.7, which is also the version used on CloudSQL).
+*   Add a file named `data-source-name` in the `res` (resource) directory. The contents on the file should be a string of
+    the format `root:[root-password]@/locations` without any newlines (assuming that you use the server's root user).
+*   [TODO Add description of running using `goapp` or IntelliJ with appropriate plugin(s).]
+
 ### Problems
 
 During development, a number of problems were encountered and solved. These lessons learned have been written down in

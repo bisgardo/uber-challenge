@@ -12,7 +12,7 @@ func ServiceUrl() string {
 }
 
 func LocalDbSourceName() string {
-	bytes, err := ioutil.ReadFile("data-source-name")
+	bytes, err := ioutil.ReadFile("res/data-source-name")
 	if err != nil {
 		panic(err)
 	}

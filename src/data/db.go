@@ -1,8 +1,8 @@
 package data
 
 import (
+	"src/logging"
 	"database/sql"
-	"logging"
 	"sync"
 )
 
