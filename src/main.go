@@ -2,24 +2,27 @@ package uber_challenge
 
 import (
 	"src/data"
+	"src/data/types"
+	"src/data/sqldb"
+	"src/data/fetch"
 	"src/logging"
 	"src/watch"
-	"strings"
-	"time"
 	"appengine"
 	"appengine/urlfetch"
 	"net/http"
 	"net/url"
 	"html/template"
 	"io/ioutil"
-	_ "github.com/go-sql-driver/mysql"
-	"strconv"
+	"database/sql"
 	"encoding/json"
+	"strings"
+	"strconv"
 	"fmt"
 	"errors"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-var db *data.LocationDb
+var db *sql.DB
 
 var recordingLogger logging.RecordingLogger
 
@@ -45,11 +48,17 @@ func init() {
 	http.HandleFunc("/movie/", render(movie, false))
 	http.HandleFunc("/update", render(update, true))
 	http.HandleFunc("/ping", render(func(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
-		t := time.Now()
-		if err := db.SqlDb.Ping(); err != nil {
+		sw := watch.NewStopWatch()
+		if err := db.Ping(); err != nil {
 			return err
 		}
-		if err := pingTemplate.Execute(w, t.String()); err != nil {
+		
+		args := &struct {
+			Clock string
+			Time int64
+		}{sw.InitTime.String(), sw.TotalElapsedTimeMillis()}
+		
+		if err := pingTemplate.Execute(w, args); err != nil {
 			return err
 		}
 		return nil
@@ -74,11 +83,10 @@ func Open(logger logging.Logger) error {
 	var err error
 	if appengine.IsDevAppServer() {
 		logger.Infof("Running in development mode")
-		db, err = data.Open("mysql", LocalDbSourceName())
-		
+		db, err = sql.Open("mysql", LocalDbSourceName())
 	} else {
 		logger.Infof("Running in production mode")
-		db, err = data.Open("mysql", CloudDbSourceName())
+		db, err = sql.Open("mysql", CloudDbSourceName())
 	}
 	return err
 }
@@ -87,7 +95,7 @@ func OpenInit(logger logging.Logger) error {
 	if err := Open(logger); err != nil {
 		return err
 	}
-	if _, err := db.Init(JsonFileName(), logger); err != nil {
+	if _, err := data.Init(db, JsonFileName(), logger); err != nil {
 		return err
 	}
 	return nil
@@ -129,7 +137,7 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	
 	logger.Infof("Rendering movie with ID %d", mId)
 	
-	m, err := data.LoadMovie(db, mId)
+	m, err := sqldb.LoadMovie(db, mId)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Movie with ID %d not found", mId), http.StatusNotFound)
 		return nil
@@ -164,21 +172,19 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	info.Director = m.Director
 	info.Released = strconv.Itoa(m.ReleaseYear)
 	
-	model := &struct {
-		Movie *data.Movie
+	args := &struct {
+		Movie *types.Movie
 		Info  *MovieInfo
 	}{&m, &info}
 	
-	if infoJson, err := data.LoadMovieInfoJson(db, m.Title, logger); infoJson != "" && err == nil {
+	if infoJson, err := sqldb.LoadMovieInfoJson(db, m.Title, logger); infoJson != "" && err == nil {
 		// Only attempt to parse JSON if it was loaded successfully
 		if err := json.Unmarshal([]byte(infoJson), &info); err != nil {
 			logger.Errorf(err.Error())
 		}
 	}
 	
-	logger.Infof("%+v", model)
-	
-	return movieTemplate.Execute(w, model)
+	return movieTemplate.Execute(w, args)
 }
 
 func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error {
@@ -186,10 +192,16 @@ func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error
 	
 	recordingLogger.Infof("Rendering movie list page")
 	
-	ms, initialized, err := data.LoadMovies(db, JsonFileName(), logger, true)
+	// Check if database is initialized and load from file if it isn't.
+	initialized, err := data.Init(db, JsonFileName(), logger)
 	if initialized {
 		recordInitUpdate(err)
 	}
+	if err != nil {
+		return err
+	}
+	
+	ms, err := sqldb.LoadMovies(db, logger, true)
 	if err != nil {
 		return err
 	}
@@ -200,7 +212,7 @@ func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error
 	
 	m := &struct {
 		Logs             []string
-		Movies           []data.IdMoviePair
+		Movies           []types.IdMoviePair
 		OutputLogs       bool
 		LogsCommentBegin template.HTML
 		LogsCommentEnd   template.HTML
@@ -228,17 +240,17 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	data.InitUpdateMutex.Lock()
 	defer data.InitUpdateMutex.Unlock()
 	
-	ms, err := data.FetchFromUrl(ServiceUrl(), ctx, logger)
+	ms, err := fetch.FetchFromUrl(ServiceUrl(), ctx, logger)
 	if err != nil {
 		return err
 	}
-	if err := data.StoreMovies(db, ms, logger); err != nil {
+	if err := sqldb.StoreMovies(db, ms, logger); err != nil {
 		return err
 	}
 	
 	// Fetch movie data.
 	// TODO Parallelize and use memcached (with expiration) instead of SQL.
-	mi, err := data.LoadMovieInfoJsons(db, logger)
+	mi, err := sqldb.LoadMovieInfoJsons(db, logger)
 	if err != nil {
 		return err
 	}
@@ -269,7 +281,7 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	}
 	
 	// Store movie data.
-	if err := data.StoreMovieInfo(db, movieTitleInfo, logger); err != nil {
+	if err := sqldb.StoreMovieInfo(db, movieTitleInfo, logger); err != nil {
 		return err
 	}
 	
@@ -336,43 +348,50 @@ func status(w http.ResponseWriter, r *http.Request) error {
 	ct := int64(0)
 	it := int64(0)
 	
-	initialized, err := db.IsInitialized()
+	initialized, err := data.IsInitialized(db)
 	if err != nil {
 		return err
 	}
 	
 	if initialized {
-		mc, err = data.QuerySingleInt(db.SqlDb, "SELECT COUNT(*) FROM movies")
+		querySingleInt := func (db *sql.DB, sql string, args ...interface{}) (int, error) {
+			row := db.QueryRow(sql, args...)
+			var i int
+			err := row.Scan(&i)
+			return i, err
+		}
+
+		mc, err = querySingleInt(db, "SELECT COUNT(*) FROM movies")
 		if err != nil {
 			return err
 		}
 		mt = sw.ElapsedTimeMillis(true)
 		
-		ac, err = data.QuerySingleInt(db.SqlDb, "SELECT COUNT(*) FROM actors")
+		ac, err = querySingleInt(db, "SELECT COUNT(*) FROM actors")
 		if err != nil {
 			return err
 		}
 		at = sw.ElapsedTimeMillis(true)
 		
-		lc, err = data.QuerySingleInt(db.SqlDb, "SELECT COUNT(*) FROM locations")
+		lc, err = querySingleInt(db, "SELECT COUNT(*) FROM locations")
 		if err != nil {
 			return err
 		}
 		lt = sw.ElapsedTimeMillis(true)
 		
-		rc, err = data.QuerySingleInt(db.SqlDb, "SELECT COUNT(*) FROM movies_actors")
+		rc, err = querySingleInt(db, "SELECT COUNT(*) FROM movies_actors")
 		if err != nil {
 			return err
 		}
 		rt = sw.ElapsedTimeMillis(true)
 		
-		cc, err = data.QuerySingleInt(db.SqlDb, "SELECT COUNT(*) FROM coordinates")
+		cc, err = querySingleInt(db, "SELECT COUNT(*) FROM coordinates")
 		if err != nil {
 			return err
 		}
 		ct = sw.ElapsedTimeMillis(true)
 		
-		ic, err = data.QuerySingleInt(db.SqlDb, "SELECT COUNT(*) FROM movie_info")
+		ic, err = querySingleInt(db, "SELECT COUNT(*) FROM movie_info")
 		if err != nil {
 			return err
 		}
@@ -405,7 +424,7 @@ func status(w http.ResponseWriter, r *http.Request) error {
 
 // TODO Make convenience function for constructing template...
 
-var pingTemplate = template.Must(template.New("").Parse("<html>Clock: {{.}}</html>"))
+var pingTemplate = template.Must(template.New("").Parse("<html><p>Clock: {{.Clock}}<p>Ping+render time: {{.Time}} ms</html>"))
 
 var movieTemplate = template.Must(
 	template.New("movie.tpl").Funcs(template.FuncMap{

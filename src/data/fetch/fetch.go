@@ -1,6 +1,7 @@
-package data
+package fetch
 
 import (
+	"src/data/types"
 	"src/logging"
 	"io/ioutil"
 	"encoding/json"
@@ -24,36 +25,7 @@ type entry struct {
 	Writer             string
 }
 
-type Movie struct {
-	Title             string
-	Locations         []Location
-	Actors            []string
-	Director          string
-	Distributor       string
-	Writer            string
-	ProductionCompany string
-	ReleaseYear       int
-}
-
-type Location struct {
-	Name    string
-	FunFact string
-}
-
-// Comparator for sorting movie list.
-type ByTitle []IdMoviePair
-
-func (ms ByTitle) Len() int {
-	return len(ms)
-}
-func (ms ByTitle) Swap(i, j int) {
-	ms[i], ms[j] = ms[j], ms[i]
-}
-func (ms ByTitle) Less(i, j int) bool {
-	return ms[i].Movie.Title < ms[j].Movie.Title
-}
-
-func FetchFromUrl(url string, ctx appengine.Context, logger logging.Logger) ([]Movie, error) {
+func FetchFromUrl(url string, ctx appengine.Context, logger logging.Logger) ([]types.Movie, error) {
 	logger.Infof("Fetching from URL '%s'", url)
 	bytes, err := fetchBytes(url, ctx)
 	if err != nil {
@@ -70,7 +42,7 @@ func FetchFromUrl(url string, ctx appengine.Context, logger logging.Logger) ([]M
 	return ms, nil
 }
 
-func FetchFromFile(filename string) ([]Movie, error) {
+func FetchFromFile(filename string) ([]types.Movie, error) {
 	log.Println("Fetching from file: " + filename)
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
@@ -101,9 +73,9 @@ func fetchBytes(url string, ctx appengine.Context) ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-func entriesToMovies(es []entry) []Movie {
+func entriesToMovies(es []entry) []types.Movie {
 	// Read entries into map indexed by the movie title.
-	m := make(map[string]*Movie)
+	m := make(map[string]*types.Movie)
 	for _, e := range es {
 		// Parse location data and skip entry if it's empty.
 		l := entryToLocation(e)
@@ -125,7 +97,7 @@ func entriesToMovies(es []entry) []Movie {
 	}
 	
 	// Extract map values to slice...
-	ms := make([]Movie, 0, len(m))
+	ms := make([]types.Movie, 0, len(m))
 	for _, mov := range m {
 		ms = append(ms, *mov)
 	}
@@ -133,7 +105,7 @@ func entriesToMovies(es []entry) []Movie {
 	return ms
 }
 
-func entryToMovie(e entry) (m Movie) {
+func entryToMovie(e entry) (m types.Movie) {
 	// "Location"/"Fun fact" is added in `entryToLocation` below.
 	if defined(e.Title) {
 		m.Title = e.Title
@@ -162,7 +134,7 @@ func entryToMovie(e entry) (m Movie) {
 	return
 }
 
-func entryToLocation(e entry) (l Location) {
+func entryToLocation(e entry) (l types.Location) {
 	if defined(e.Locations) {
 		l.Name = e.Locations
 	}
