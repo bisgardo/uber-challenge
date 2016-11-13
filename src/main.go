@@ -5,6 +5,7 @@ import (
 	"src/data/types"
 	"src/data/sqldb"
 	"src/data/fetch"
+	"src/tpl"
 	"src/logging"
 	"src/watch"
 	"appengine"
@@ -58,7 +59,7 @@ func init() {
 			Time int64
 		}{sw.InitTime.String(), sw.TotalElapsedTimeMillis()}
 		
-		if err := pingTemplate.Execute(w, args); err != nil {
+		if err := tpl.Ping.Execute(w, args); err != nil {
 			return err
 		}
 		return nil
@@ -184,7 +185,7 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 		}
 	}
 	
-	return movieTemplate.Execute(w, args)
+	return tpl.Movie.Execute(w, args)
 }
 
 func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error {
@@ -218,7 +219,7 @@ func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error
 		LogsCommentEnd   template.HTML
 	}{recordingLogger.Entries, ms, true, "<!-- <LOGS>", "</LOGS> -->"}
 	
-	if err := listTemplate.Execute(w, m); err != nil {
+	if err := tpl.Movies.Execute(w, m); err != nil {
 		return err
 	}
 	
@@ -419,44 +420,5 @@ func status(w http.ResponseWriter, r *http.Request) error {
 		RecordedLog      []string
 	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog}
 	
-	return statusTemplate.Execute(w, cs)
+	return tpl.Status.Execute(w, cs)
 }
-
-// TODO Make convenience function for constructing template...
-
-var pingTemplate = template.Must(template.New("").Parse("<html><p>Clock: {{.Clock}}<p>Ping+render time: {{.Time}} ms</html>"))
-
-var movieTemplate = template.Must(
-	template.New("movie.tpl").Funcs(template.FuncMap{
-		"field": func (field string) template.HTML {
-			if field == "" || field == "N/A" {
-				return "<i>N/A</i>"
-			}
-			return template.HTML(field)
-		},
-	}).ParseFiles("res/tpl/movie.tpl"),
-)
-
-var listTemplate = template.Must(
-	// Custom string functions needed because this appears to be the only way to prevent the template engine from
-	// littering the output with disruptive whitespace. Also, duplication of template name was necessary for the `Funcs`
-	// call to work.
-	template.New("list.tpl").Funcs(template.FuncMap{
-		"join": func (ss []string) string {
-			switch len(ss) {
-			case 0:
-				return ""
-			case 1:
-				return ss[0]
-			case 2:
-				return ss[0] + " and " + ss[1]
-			}
-			return strings.Join(ss[:len(ss) - 1], ", ") + ", and " + ss[len(ss) - 1]
-		},
-		"parenthesize": func (s string) string {
-			return "(" + s + ")"
-		},
-	}).ParseFiles("res/tpl/list.tpl"),
-)
-
-var statusTemplate = template.Must(template.ParseFiles("res/tpl/status.tpl"))

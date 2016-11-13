@@ -1,18 +1,18 @@
 <html>
     <p>
-        Clock: {{.Clock}}
+        Clock: {{ .Clock }}
     </p>
     <p>
-        Render time: {{.Time}} ms
+        Render time: {{ .Time }} ms
     </p>
     
     <table>
-        <tr><td>#Movies</td><td>{{.MoviesCount}}</td><td>({{.MoviesTime}} ms)</td></tr>
-        <tr><td>#Actors</td><td>{{.ActorsCount}}</td><td>({{.ActorsTime}} ms)</td></tr>
-        <tr><td>#Locations</td><td>{{.LocationsCount}}</td><td>({{.LocationsTime}} ms)</td></tr>
-        <tr><td>#Movie-actor relations</td><td>{{.MovieActorsCount}}</td><td>({{.MovieActorsTime}} ms)</td></tr>
-        <tr><td>#Location coordinates</td><td>{{.CoordinatesCount}}</td><td>({{.CoordinatesTime}} ms)</td></tr>
-        <tr><td>#Cached movie info lookups</td><td>{{.InfoCount}}</td><td>({{.InfoTime}} ms)</td></tr>
+        <tr><td>#Movies</td><td>{{ .MoviesCount }}</td><td>({{ .MoviesTime }} ms)</td></tr>
+        <tr><td>#Actors</td><td>{{ .ActorsCount }}</td><td>({{ .ActorsTime }} ms)</td></tr>
+        <tr><td>#Locations</td><td>{{ .LocationsCount }}</td><td>({{ .LocationsTime }} ms)</td></tr>
+        <tr><td>#Movie-actor relations</td><td>{{ .MovieActorsCount }}</td><td>({{ .MovieActorsTime }} ms)</td></tr>
+        <tr><td>#Location coordinates</td><td>{{ .CoordinatesCount }}</td><td>({{ .CoordinatesTime }} ms)</td></tr>
+        <tr><td>#Cached movie info lookups</td><td>{{ .InfoCount }}</td><td>({{ .InfoTime }} ms)</td></tr>
     </table>
     
     <p>
