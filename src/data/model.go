@@ -9,6 +9,15 @@ import (
 	"strings"
 )
 
+type IdMoviePair struct {
+	Id    int64
+	Movie Movie
+}
+
+// TODO Turn bulk insertion stuff into nice utility (that is safe regarding injection and missing data) and replace current solutions with it...
+
+// TODO Replace '*' in selects with explicit column names for robustness.
+
 func InitTables(tx *sql.Tx, logger logging.Logger) error {
 	// TODO Store writer and director in (renamed) actors table and add role to relation.
 	
@@ -107,11 +116,11 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 		return err
 	}
 	
-	logger.Infof("Creating table 'omdb' unless it already exists")
+	logger.Infof("Creating table 'movie_info' unless it already exists")
 	_, err = tx.Exec(
-		`CREATE TABLE IF NOT EXISTS omdb (
+		`CREATE TABLE IF NOT EXISTS movie_info (
 			movie_title VARCHAR(255) PRIMARY KEY,
-			data        TEXT
+			info_json   TEXT
 		)`,
 	)
 	if err != nil {
@@ -121,147 +130,153 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 	return nil
 }
 
-func InsertMovies(tx *sql.Tx, ms []Movie, logger logging.Logger) error {
-	// Insert movies, locations, and actors.
-	as := make(map[string]int64)
-	for _, m := range ms {
-		// Inserting movie.
-		logger.Debugf("Inserting movie '%v'", m.Title)
-		mId, err := Insert(
-			tx,
-			"INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?, ?)",
-			nil, m.Title, m.Writer, m.Director, m.Distributor, m.ProductionCompany, m.ReleaseYear,
-		)
-		if err != nil {
-			return err
-		}
-		//logger.Debugf("Movie inserted with ID %d", mId)
-		
-		// Inserting locations for movie.
-		for _, l := range m.Locations {
-			logger.Debugf("Inserting location '%v' for movie ID %d", l, mId)
-			_, err := Insert(
-				tx,
-				"INSERT INTO locations VALUES (?, ?, ?, ?)",
-				nil, mId, l.Name, l.FunFact,
-			)
-			if err != nil {
-				return err
-			}
-		}
-		
-		// Inserting actors in movie.
-		for _, a := range m.Actors {
-			aId, exists := as[a]
-			if !exists {
-				// Inserting actor.
-				logger.Debugf("Inserting actor '%v'", a)
-				aId, err = Insert(tx, "INSERT INTO actors VALUES (?, ?)", nil, a)
-				//logger.Debugf("Actor inserted with ID %d", aId)
-				if err != nil {
-					return err
-				}
-				as[a] = aId
-			}
-			
-			// Inserting actor relation to movie.
-			logger.Debugf("Inserting actor-movie relation %d-%d", mId, aId)
-			_, err = Insert(tx, "INSERT INTO movies_actors VALUES (?, ?)", mId, aId)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func InsertMoviesOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) error {
-	// Insert movies, locations, and actors.
-	as := make(map[string]int64)
-	relations := make(map[int64]int64)
-	insertLocationsVals := ""
-	insertMoviesActorsVals := ""
-	locationCount := 0
-	movieActorCount := 0
-	for _, m := range ms {
-		// Inserting movie.
-		logger.Debugf("Inserting movie '%v'", m.Title)
-		mId, err := Insert(
-			tx,
-			"INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?, ?)",
-			nil, m.Title, m.Writer, m.Director, m.Distributor, m.ProductionCompany, m.ReleaseYear,
-		)
-		if err != nil {
-			return err
-		}
-		//logger.Debugf("Movie inserted with ID %d", mId)
-		
-		for _, l := range m.Locations {
-			insertLocationsVal := fmt.Sprintf(
-				"(NULL, %d, '%s', '%s')",
-				mId,
-				// TODO Make robust towards injection!
-				escapeSingleQuotes(l.Name),
-				escapeSingleQuotes(l.FunFact),
-			)
-			if len(insertLocationsVals) > 0 {
-				insertLocationsVals += ", "
-			}
-			insertLocationsVals += insertLocationsVal
-			
-			locationCount++
-		}
-		
-		// Inserting actors in movie.
-		for _, a := range m.Actors {
-			aId, exists := as[a]
-			if !exists {
-				// Inserting actor.
-				logger.Debugf("Inserting actor '%s'", a)
-				aId, err = Insert(tx, "INSERT INTO actors VALUES (?, ?)", nil, a)
-				//logger.Debugf("Actor inserted with ID %d", aId)
-				if err != nil {
-					return err
-				}
-				as[a] = aId
-			}
-			
-			relations[mId] = aId
-			
-			insertMoviesActorsVal := fmt.Sprintf("(%d, %d)", mId, aId)
-			if len(insertMoviesActorsVals) > 0 {
-				insertMoviesActorsVals += ", "
-			}
-			insertMoviesActorsVals += insertMoviesActorsVal
-			
-			movieActorCount++;
-		}
-	}
-	
-	// Bulk inserting locations.
-	insertLocationsStmt := "INSERT INTO locations VALUES " + insertLocationsVals
-	logger.Debugf("Inserting %d locations", locationCount)
-	logger.Debugf("Executing query %s", insertLocationsStmt)
-	if _, err := tx.Exec(insertLocationsStmt); err != nil {
-		return err
-	}
-	
-	// Bulk inserting movie-actor relations.
-	insertMoviesActorsStmt := "INSERT INTO movies_actors VALUES " + insertMoviesActorsVals
-	logger.Debugf("Inserting %d actor-movie relations", movieActorCount)
-	logger.Debugf("Executing query %s", insertMoviesActorsStmt)
-	if _, err := tx.Exec(insertMoviesActorsStmt); err != nil {
-		return err
-	}
-	
-	return nil
-}
+//func InsertMovies(tx *sql.Tx, ms []Movie, logger logging.Logger) error {
+//	// Insert movies, locations, and actors.
+//	as := make(map[string]int64)
+//	for _, m := range ms {
+//		// Inserting movie.
+//		logger.Debugf("Inserting movie '%v'", m.Title)
+//		mId, err := Insert(
+//			tx,
+//			"INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?, ?)",
+//			nil, m.Title, m.Writer, m.Director, m.Distributor, m.ProductionCompany, m.ReleaseYear,
+//		)
+//		if err != nil {
+//			return err
+//		}
+//		//logger.Debugf("Movie inserted with ID %d", mId)
+//		
+//		// Inserting locations for movie.
+//		for _, l := range m.Locations {
+//			logger.Debugf("Inserting location '%v' for movie ID %d", l, mId)
+//			_, err := Insert(
+//				tx,
+//				"INSERT INTO locations VALUES (?, ?, ?, ?)",
+//				nil, mId, l.Name, l.FunFact,
+//			)
+//			if err != nil {
+//				return err
+//			}
+//		}
+//		
+//		// Inserting actors in movie.
+//		for _, a := range m.Actors {
+//			aId, exists := as[a]
+//			if !exists {
+//				// Inserting actor.
+//				logger.Debugf("Inserting actor '%v'", a)
+//				aId, err = Insert(tx, "INSERT INTO actors VALUES (?, ?)", nil, a)
+//				//logger.Debugf("Actor inserted with ID %d", aId)
+//				if err != nil {
+//					return err
+//				}
+//				as[a] = aId
+//			}
+//			
+//			// Inserting actor relation to movie.
+//			logger.Debugf("Inserting actor-movie relation %d-%d", mId, aId)
+//			_, err = Insert(tx, "INSERT INTO movies_actors VALUES (?, ?)", mId, aId)
+//			if err != nil {
+//				return err
+//			}
+//		}
+//	}
+//	return nil
+//}
+//
+//func InsertMoviesOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) error {
+//	// Insert movies, locations, and actors.
+//	as := make(map[string]int64)
+//	relations := make(map[int64]int64)
+//	insertLocationsVals := ""
+//	insertMoviesActorsVals := ""
+//	locationCount := 0
+//	movieActorCount := 0
+//	for _, m := range ms {
+//		// Inserting movie.
+//		logger.Debugf("Inserting movie '%v'", m.Title)
+//		mId, err := Insert(
+//			tx,
+//			"INSERT INTO movies VALUES (?, ?, ?, ?, ?, ?, ?)",
+//			nil, m.Title, m.Writer, m.Director, m.Distributor, m.ProductionCompany, m.ReleaseYear,
+//		)
+//		if err != nil {
+//			return err
+//		}
+//		//logger.Debugf("Movie inserted with ID %d", mId)
+//		
+//		for _, l := range m.Locations {
+//			insertLocationsVal := fmt.Sprintf(
+//				"(NULL, %d, '%s', '%s')",
+//				mId,
+//				// TODO Make robust towards injection!
+//				escapeSingleQuotes(l.Name),
+//				escapeSingleQuotes(l.FunFact),
+//			)
+//			if len(insertLocationsVals) > 0 {
+//				insertLocationsVals += ", "
+//			}
+//			insertLocationsVals += insertLocationsVal
+//			
+//			locationCount++
+//		}
+//		
+//		// Inserting actors in movie.
+//		for _, a := range m.Actors {
+//			aId, exists := as[a]
+//			if !exists {
+//				// Inserting actor.
+//				logger.Debugf("Inserting actor '%s'", a)
+//				aId, err = Insert(tx, "INSERT INTO actors VALUES (?, ?)", nil, a)
+//				//logger.Debugf("Actor inserted with ID %d", aId)
+//				if err != nil {
+//					return err
+//				}
+//				as[a] = aId
+//			}
+//			
+//			relations[mId] = aId
+//			
+//			insertMoviesActorsVal := fmt.Sprintf("(%d, %d)", mId, aId)
+//			if len(insertMoviesActorsVals) > 0 {
+//				insertMoviesActorsVals += ", "
+//			}
+//			insertMoviesActorsVals += insertMoviesActorsVal
+//			
+//			movieActorCount++;
+//		}
+//	}
+//	
+//	// Bulk inserting locations.
+//	insertLocationsStmt := "INSERT INTO locations VALUES " + insertLocationsVals
+//	logger.Debugf("Inserting %d locations", locationCount)
+//	logger.Debugf("Executing query %s", insertLocationsStmt)
+//	if _, err := tx.Exec(insertLocationsStmt); err != nil {
+//		return err
+//	}
+//	
+//	// Bulk inserting movie-actor relations.
+//	insertMoviesActorsStmt := "INSERT INTO movies_actors VALUES " + insertMoviesActorsVals
+//	logger.Debugf("Inserting %d actor-movie relations", movieActorCount)
+//	logger.Debugf("Executing query %s", insertMoviesActorsStmt)
+//	if _, err := tx.Exec(insertMoviesActorsStmt); err != nil {
+//		return err
+//	}
+//	
+//	return nil
+//}
 
 func escapeSingleQuotes(s string) string {
 	return strings.Replace(s, "'", "\\'", -1)
 }
 
 func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) error {
+	if len(ms) == 0 {
+		return nil
+	}
+	
+	logger.Infof("Inserting %d movies into database", len(ms))
+	
 	sw := watch.NewStopWatch()
 	
 	// Batch insert movies.
@@ -320,6 +335,7 @@ func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) er
 		}
 	}
 	
+	// TODO Make robust towards there being no data.
 	insertLocationsStmt := "INSERT INTO locations VALUES" + insertLocationsVals
 	//logger.Debugf("Executing query %s", insertLocationsStmt)
 	if _, err := tx.Exec(insertLocationsStmt); err != nil {
@@ -347,6 +363,7 @@ func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) er
 		}
 	}
 	
+	// TODO Make robust towards there being no data.
 	insertActorsStmt := "INSERT INTO actors VALUES" + insertActorsVals
 	//logger.Debugf("Executing query %s", insertActorsStmt)
 	if _, err := tx.Exec(insertActorsStmt); err != nil {
@@ -377,6 +394,7 @@ func InsertMoviesMoreOptimized(tx *sql.Tx, ms []Movie, logger logging.Logger) er
 		}
 	}
 	
+	// TODO Make robust towards there being no data.
 	insertMovieActorStmt := "INSERT INTO movies_actors VALUES" + insertMovieActorVals
 	//logger.Debugf("Executing query %s", insertMovieActorStmt)
 	if _, err := tx.Exec(insertMovieActorStmt); err != nil {
@@ -427,14 +445,14 @@ func actorIdMap(tx *sql.Tx) (map[string]int64, error) {
 	return m, err
 }
 
-func (db *LocationDb) LoadMovies(filename string, logger logging.Logger, optimize bool) (*[]Movie, bool, error) {
+func LoadMovies(db *LocationDb, filename string, logger logging.Logger, optimize bool) ([]IdMoviePair, bool, error) {
 	// Check if database is initialized and load from file if it isn't.
 	initialized, err := db.Init(filename, logger)
 	if err != nil {
 		return nil, initialized, err
 	}
 	
-	var ms []Movie
+	var ms []IdMoviePair
 	
 	err = db.transaction(func (tx *sql.Tx) error {
 		logger.Debugf("Querying movies")
@@ -460,14 +478,13 @@ func (db *LocationDb) LoadMovies(filename string, logger logging.Logger, optimiz
 			return err
 		}
 		
-		// TODO Set capacity of `ms`.
-		
+		ms = make([]IdMoviePair, 0, len(idMovieMap))
 		if optimize {
 			if err := LoadAllLocations(tx, idMovieMap, logger); err != nil {
 				return err
 			}
-			for _, m := range idMovieMap {
-				ms = append(ms, *m)
+			for mId, m := range idMovieMap {
+				ms = append(ms, IdMoviePair{mId, *m})
 			}
 		} else {
 			for mId, m := range idMovieMap {
@@ -475,7 +492,7 @@ func (db *LocationDb) LoadMovies(filename string, logger logging.Logger, optimiz
 					return err
 				}
 				
-				ms = append(ms, *m)
+				ms = append(ms, IdMoviePair{mId, *m})
 			}
 		}
 		
@@ -483,7 +500,7 @@ func (db *LocationDb) LoadMovies(filename string, logger logging.Logger, optimiz
 	})
 	
 	sort.Sort(ByTitle(ms))
-	return &ms, initialized, err
+	return ms, initialized, err
 }
 
 func LoadLocations(tx *sql.Tx, mId int64, ls *[]Location, logger logging.Logger) error {
@@ -557,4 +574,98 @@ func StoreMovies(db *LocationDb, ms []Movie, logger logging.Logger) error {
 		}
 		return nil
 	})
+}
+
+func LoadMovieInfoJson(db *LocationDb, title string, logger logging.Logger) (string, error) {
+	sw := watch.NewStopWatch()
+	
+	var info string
+	err := db.transaction(func (tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT info_json FROM movie_info WHERE movie_title = ?", title)
+		return row.Scan(&info)
+	})
+	
+	if err != nil {
+		logger.Infof("Loaded info for movie '%s' in %d ms", title, sw.TotalElapsedTimeMillis())
+	}
+	
+	return info, err
+}
+
+func LoadMovieInfoJsons(db *LocationDb, logger logging.Logger) (map[string]string, error) {
+	sw := watch.NewStopWatch()
+	movieInfo := make(map[string]string)
+	err := db.transaction(func (tx *sql.Tx) error {
+		rows, err := tx.Query("SELECT * FROM movie_info")
+		if err != nil {
+			return err
+		}
+		
+		return ForEachRow(rows, func (rows *sql.Rows) error {
+			var t string
+			var i string
+			if err := rows.Scan(&t, &i); err != nil {
+				return err
+			}
+			movieInfo[t] = i
+			return nil
+		})
+	})
+	
+	if err == nil {
+		logger.Infof("Fetched info for %d movies in %d ms", len(movieInfo), sw.TotalElapsedTimeMillis())
+	}
+	
+	return movieInfo, err
+}
+
+
+func StoreMovieInfo(db *LocationDb, movieInfo map[string]string, logger logging.Logger) error {
+	if len(movieInfo) == 0 {
+		return nil
+	}
+	
+	logger.Infof("Inserting %d movie infos into database", len(movieInfo))
+	
+	return db.transaction(func (tx *sql.Tx) error {
+		vals := ""
+		
+		for t, i := range movieInfo {
+			// TODO Make robust towards injection!
+			val := fmt.Sprintf("\n('%s', '%s')", escapeSingleQuotes(t), escapeSingleQuotes(i))
+			if len(vals) > 0 {
+				vals += ","
+			}
+			vals += val
+			//_, err := Insert(tx, "INSERT INTO movie_info VALUES (?, ?)", t, i)
+			//if err != nil {
+			//	return err
+			//}
+		}
+		
+		// TODO Make robust towards there being no data.
+		insertStmt := "INSERT INTO movie_info VALUES" + vals
+		logger.Debugf("Executing query %s", insertStmt)
+		_, err := tx.Exec(insertStmt)
+		return err
+	})
+}
+
+func LoadMovie(db *LocationDb, id int) (Movie, error) {
+	var m Movie
+	err := db.transaction(func (tx *sql.Tx) error {
+		row := tx.QueryRow("SELECT * FROM movies WHERE id = ?", id)
+		
+		var dummy int
+		return row.Scan(
+			&dummy,
+			&m.Title,
+			&m.Writer,
+			&m.Director,
+			&m.Distributor,
+			&m.ProductionCompany,
+			&m.ReleaseYear,
+		)
+	})
+	return m, err
 }

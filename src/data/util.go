@@ -7,11 +7,7 @@ func Insert(tx *sql.Tx, sql string, args ...interface{}) (int64, error) {
 	if err != nil {
 		return -1, err
 	}
-	id, err := r.LastInsertId()
-	if err != nil {
-		return -1, err
-	}
-	return id, nil
+	return r.LastInsertId()
 }
 
 func ForEachRow(rows *sql.Rows, callback func(*sql.Rows) error) error {

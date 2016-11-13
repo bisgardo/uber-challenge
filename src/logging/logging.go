@@ -64,7 +64,7 @@ func (logger * RecordingLogger) Unwrap() {
 func (logger *RecordingLogger) add(kind string, format string, args ...interface{}) {
 	ts := time.Now().String()
 	msg := fmt.Sprintf(format, args...)
-	entry := fmt.Sprintf("%v(%v): %v", kind, ts, msg)
+	entry := fmt.Sprintf("%s(%s): %s", kind, ts, msg)
 	logger.Entries = append(logger.Entries, entry)
 }
 

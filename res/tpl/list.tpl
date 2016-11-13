@@ -1,32 +1,24 @@
 {{ .LogsCommentBegin }}
     {{ range .Logs }}
-        {{.}}                
-    {{end}}
+		{{.}}
+	{{end}}
 {{ .LogsCommentEnd }}
 <html>
 	<head>
 		<title>Movies</title>
 	</head>
 	<body>
-	    <div>
-	        {{ if .OutputLogs }}
-	        <ul>
-            {{ range .Logs }}
-                <li>{{.}}</li>
-            {{end}}
-            </ul>
-            {{ end }}
-        </div>
-		<form action="update" method="post"><button>Update</button> (crashes on concurrent calls because requests then hit multiple instances)</form>
+		<form action="/update" method="post"><button>Update</button> (crashes on concurrent calls because requests then hit multiple instances)</form>
 		<ul>
 			{{range .Movies}}
 				<li>
-					{{if .Title}}<b>{{.Title}}</b>{{else}}<i>[No title]<i>{{end}}
-					{{if .Writer}}<i>Written by </i> {{.Writer}}.{{end}}
-					{{$actors := join .Actors}}
+					{{ $m := .Movie}}
+					<a href="/movie/{{.Id}}">{{if $m.Title}}<b>{{$m.Title}}</b>{{else}}<i>[No title]</i>{{end}}</a>
+					{{if $m.Writer}}<i>Written by </i> {{$m.Writer}}.{{end}}
+					{{$actors := join $m.Actors}}
 					{{if $actors}}<i>Actor(s):</i> {{$actors}}.{{end}}
 					<ul>
-					{{range .Locations}}
+					{{range $m.Locations}}
 						<li>
 							{{.Name}}
 							{{if .FunFact}}{{parenthesize .FunFact}}{{end}}
@@ -36,6 +28,7 @@
 				</li>
 			{{end}}
 		</ul>
-		<p>[TODO 'favicon.ico' stolen from...]</p>
+		
+		<footer>[TODO 'favicon.ico' stolen from...]</footer>
   </body>
 </html>

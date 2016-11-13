@@ -24,19 +24,22 @@ func (db *LocationDb) Init(filename string, logger logging.Logger) (bool, error)
 	InitUpdateMutex.Lock()
 	defer InitUpdateMutex.Unlock()
 	
-	alreadyInitialized, err := db.IsInitialized()
+	initialized, err := db.IsInitialized()
 	if err != nil {
 		return false, err
 	}
 	
-	if alreadyInitialized {
+	if initialized {
 		logger.Infof("Database is already initialized")
 		return false, nil
 	}
 	
 	logger.Infof("Initializing database from cached file...")
 	
-	ms := FetchFromFile(filename)
+	ms, err := FetchFromFile(filename)
+	if err != nil {
+		return true, err
+	}
 	
 	err = db.transaction(func (tx *sql.Tx) error {
 		if err := InitTables(tx, logger); err != nil {
@@ -48,7 +51,7 @@ func (db *LocationDb) Init(filename string, logger logging.Logger) (bool, error)
 		return nil
 	})
 	if err != nil {
-		return false, err
+		return true, err
 	}
 	return true, nil
 }

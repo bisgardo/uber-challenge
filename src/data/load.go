@@ -41,7 +41,7 @@ type Location struct {
 }
 
 // Comparator for sorting movie list.
-type ByTitle []Movie
+type ByTitle []IdMoviePair
 
 func (ms ByTitle) Len() int {
 	return len(ms)
@@ -50,39 +50,43 @@ func (ms ByTitle) Swap(i, j int) {
 	ms[i], ms[j] = ms[j], ms[i]
 }
 func (ms ByTitle) Less(i, j int) bool {
-	return ms[i].Title < ms[j].Title
+	return ms[i].Movie.Title < ms[j].Movie.Title
 }
 
-func FetchFromUrl(url string, ctx appengine.Context, logger logging.Logger) []Movie {
-	logger.Infof("Fetching from URL '%v'", url)
+func FetchFromUrl(url string, ctx appengine.Context, logger logging.Logger) ([]Movie, error) {
+	logger.Infof("Fetching from URL '%s'", url)
 	bytes, err := fetchBytes(url, ctx)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	logger.Infof("Fetched %d bytes", len(bytes))
-	es := fetchEntries(bytes)
+	es, err := fetchEntries(bytes)
+	if err != nil {
+		return nil, err
+	}
 	logger.Infof("Resolved %d entries", len(es))
 	ms := entriesToMovies(es)
 	logger.Infof("Resolved %d movies", len(ms))
-	return ms
+	return ms, nil
 }
 
-func FetchFromFile(filename string) []Movie {
+func FetchFromFile(filename string) ([]Movie, error) {
 	log.Println("Fetching from file: " + filename)
 	bytes, err := ioutil.ReadFile(filename)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	
-	es := fetchEntries(bytes)
-	return entriesToMovies(es)
+	es, err := fetchEntries(bytes)
+	if err != nil {
+		return nil, err
+	}
+	
+	return entriesToMovies(es), nil
 }
 
-func fetchEntries(bytes []byte) (es []entry) {
-	err := json.Unmarshal(bytes, &es)
-	if err != nil {
-		panic(err)
-	}
+func fetchEntries(bytes []byte) (es []entry, err error) {
+	err = json.Unmarshal(bytes, &es)
 	return
 }
 
@@ -130,7 +134,7 @@ func entriesToMovies(es []entry) []Movie {
 }
 
 func entryToMovie(e entry) (m Movie) {
-	// Location/fun fact is added in `entryToLocation`.
+	// "Location"/"Fun fact" is added in `entryToLocation` below.
 	if defined(e.Title) {
 		m.Title = e.Title
 	}
