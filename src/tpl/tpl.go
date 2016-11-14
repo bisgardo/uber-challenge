@@ -5,7 +5,6 @@ import (
 	"html/template"
 	"net/http"
 	"reflect"
-	"log"
 )
 
 const extension = ".tpl"
@@ -20,8 +19,7 @@ func compile(name string, funcMap template.FuncMap) *template.Template {
 	funcMap["logs_comment_end"] = func () template.HTML { return "</LOGS> -->" }
 	funcMap["has_field"] = func (arg interface{}, field string) bool {
 		v := reflect.Indirect(reflect.ValueOf(arg))
-		f, exists := v.Type().FieldByName(field)
-		log.Printf("%v has field '%s': %b (%s)\n", arg, field, exists, f)
+		_, exists := v.Type().FieldByName(field)
 		return exists
 	}
 	
@@ -32,7 +30,7 @@ func Render(w http.ResponseWriter, tpl *template.Template, args interface{}) err
 	return tpl.ExecuteTemplate(w, "layout", args)
 }
 
-var Front = compile("front", template.FuncMap{})
+var About = compile("about", template.FuncMap{})
 
 var Movie = compile("movie", template.FuncMap{
 	"field": func (field string) template.HTML {

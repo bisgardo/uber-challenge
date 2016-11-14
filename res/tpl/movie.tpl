@@ -7,7 +7,8 @@
 <table>
 	<tr>
 		{{ $info := .Info }}
-		<td>{{ if $info.Poster }}<img src="{{ $info.Poster }}"/>{{ end }}</td>
+		{{ $poster := $info.Poster }}
+		<td>{{ if ne $poster "N/A" }}<img src="{{ $poster }}"/>{{ end }}</td>
 		<td>
 			<h3>Details (from <a href="https://www.omdbapi.com/">OMDB</a>)</h3>
 			<table>
@@ -32,28 +33,12 @@
 					<td>{{ field $info.Plot }}</td>
 				</tr>
 				<tr>
-					<td>Year</td>
-					<td>{{ field $info.Year }}</td>
-				</tr>
-				<tr>
-					<td>Rated</td>
-					<td>{{ field $info.Rated }}</td>
-				</tr>
-				<tr>
-					<td>Released</td>
-					<td>{{ field $info.Released }}</td>
-				</tr>
-				<tr>
-					<td>Runtime</td>
-					<td>{{ field $info.Runtime }}</td>
+					<td>Writer</td>
+					<td>{{ field $info.Writer }}</td>
 				</tr>
 				<tr>
 					<td>Director</td>
 					<td>{{ field $info.Director }}</td>
-				</tr>
-				<tr>
-					<td>Writer</td>
-					<td>{{ field $info.Writer }}</td>
 				</tr>
 				<tr>
 					<td>Actors</td>
@@ -70,6 +55,22 @@
 				<tr>
 					<td>Awards</td>
 					<td>{{ field $info.Awards }}</td>
+				</tr>
+				<tr>
+					<td>Year</td>
+					<td>{{ field $info.Year }}</td>
+				</tr>
+				<tr>
+					<td>Released</td>
+					<td>{{ field $info.Released }}</td>
+				</tr>
+				<tr>
+					<td>Runtime</td>
+					<td>{{ field $info.Runtime }}</td>
+				</tr>
+				<tr>
+					<td>Rated</td>
+					<td>{{ field $info.Rated }}</td>
 				</tr>
 			</table>
 		</td>

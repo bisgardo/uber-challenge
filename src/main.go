@@ -45,6 +45,7 @@ func init() {
 	
 	http.HandleFunc("/", render(front, false))
 	http.HandleFunc("/movie", render(movies, false))
+	http.HandleFunc("/data", dataJson)
 	http.HandleFunc("/movie/", render(movie, false))
 	http.HandleFunc("/update", render(update, true))
 	http.HandleFunc("/ping", render(func(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
@@ -124,7 +125,7 @@ func front(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	args := &struct {
 	}{}
 	
-	return tpl.Render(w, tpl.Front, args)
+	return tpl.Render(w, tpl.About, args)
 }
 
 func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
@@ -229,6 +230,22 @@ func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error
 	}
 	
 	return nil
+}
+
+func dataJson(w http.ResponseWriter, r *http.Request) {
+	//time.Sleep(1000000000)
+	
+	ctx := appengine.NewContext(r)
+	
+	// TODO Only load movies...
+	ms, err := sqldb.LoadMovies(db, ctx, true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	
+	if err := json.NewEncoder(w).Encode(ms); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {

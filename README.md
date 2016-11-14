@@ -14,7 +14,7 @@ Uber challenge: San Francisco Movies
 The project was implemented in Go and [deployed](https://uber-challenge-148819.appspot.com) on Google's App Engine as my
 first experience with both of these technologies.
 
-The data is stored in a MySQL database, which on the App Engine is called Cloud SQL.
+The data is intended to stored in Cloud SQL, which is an App Engine variant of MySQL.
 
 During development, Go App Engine SDK 1.9.40 (which includes Go 1.6.2) and MySQL 5.7.16 were used. At the time of this
 writing, Cloud SQL is based on MySQL 5.7.
