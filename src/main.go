@@ -12,7 +12,6 @@ import (
 	"appengine/urlfetch"
 	"net/http"
 	"net/url"
-	"html/template"
 	"io/ioutil"
 	"database/sql"
 	"encoding/json"
@@ -44,7 +43,7 @@ func init() {
 	
 	recordInitUpdate(nil)
 	
-	http.HandleFunc("/", render(movies, false))
+	http.HandleFunc("/", render(front, false))
 	http.HandleFunc("/movie", render(movies, false))
 	http.HandleFunc("/movie/", render(movie, false))
 	http.HandleFunc("/update", render(update, true))
@@ -56,10 +55,10 @@ func init() {
 		
 		args := &struct {
 			Clock string
-			Time int64
+			Time  int64
 		}{sw.InitTime.String(), sw.TotalElapsedTimeMillis()}
 		
-		if err := tpl.Ping.Execute(w, args); err != nil {
+		if err := tpl.Render(w, tpl.Ping, args); err != nil {
 			return err
 		}
 		return nil
@@ -121,6 +120,13 @@ func render(renderer func(w http.ResponseWriter, r *http.Request, logger logging
 	}
 }
 
+func front(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
+	args := &struct {
+	}{}
+	
+	return tpl.Render(w, tpl.Front, args)
+}
+
 func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
 	defer func() {
 		logger.Infof("Clearing recording logger")
@@ -174,9 +180,10 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	info.Released = strconv.Itoa(m.ReleaseYear)
 	
 	args := &struct {
-		Movie *types.Movie
-		Info  *MovieInfo
-	}{&m, &info}
+		Subtitle string
+		Movie    *types.Movie
+		Info     *MovieInfo
+	}{info.Title, &m, &info}
 	
 	if infoJson, err := sqldb.LoadMovieInfoJson(db, m.Title, logger); infoJson != "" && err == nil {
 		// Only attempt to parse JSON if it was loaded successfully
@@ -185,13 +192,13 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 		}
 	}
 	
-	return tpl.Movie.Execute(w, args)
+	return tpl.Render(w, tpl.Movie, args)
 }
 
 func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error {
 	defer recordingLogger.Clear()
 	
-	recordingLogger.Infof("Rendering movie list page")
+	logger.Infof("Rendering movie list page")
 	
 	// Check if database is initialized and load from file if it isn't.
 	initialized, err := data.Init(db, JsonFileName(), logger)
@@ -211,15 +218,13 @@ func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error
 	
 	logger.Infof("Clearing recording logger")
 	
-	m := &struct {
-		Logs             []string
-		Movies           []types.IdMoviePair
-		OutputLogs       bool
-		LogsCommentBegin template.HTML
-		LogsCommentEnd   template.HTML
-	}{recordingLogger.Entries, ms, true, "<!-- <LOGS>", "</LOGS> -->"}
+	args := &struct {
+		Logs       []string
+		Movies     []types.IdMoviePair
+		OutputLogs bool
+	}{recordingLogger.Entries, ms, true}
 	
-	if err := tpl.Movies.Execute(w, m); err != nil {
+	if err := tpl.Render(w, tpl.Movies, args); err != nil {
 		return err
 	}
 	
@@ -361,7 +366,7 @@ func status(w http.ResponseWriter, r *http.Request) error {
 			err := row.Scan(&i)
 			return i, err
 		}
-
+		
 		mc, err = querySingleInt(db, "SELECT COUNT(*) FROM movies")
 		if err != nil {
 			return err
@@ -401,7 +406,7 @@ func status(w http.ResponseWriter, r *http.Request) error {
 	
 	dt := sw.TotalElapsedTimeMillis()
 	
-	cs := struct {
+	args := struct {
 		Clock            string
 		Time             int64
 		MoviesCount      int
@@ -420,5 +425,5 @@ func status(w http.ResponseWriter, r *http.Request) error {
 		RecordedLog      []string
 	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog}
 	
-	return tpl.Status.Execute(w, cs)
+	return tpl.Render(w, tpl.Status, args)
 }

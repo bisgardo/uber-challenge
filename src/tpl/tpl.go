@@ -3,22 +3,44 @@ package tpl
 import (
 	"strings"
 	"html/template"
+	"net/http"
+	"reflect"
+	"log"
 )
 
+const extension = ".tpl"
+
+type Data []interface{}
+
 func compile(name string, funcMap template.FuncMap) *template.Template {
-	name += ".tpl"
-	filename := "res/tpl/" + name
-	return template.Must(template.New(name).Funcs(funcMap).ParseFiles(filename))
+	tplName := name + extension
+	filename := "res/tpl/" + tplName
+	
+	funcMap["logs_comment_begin"] = func () template.HTML { return "<!-- <LOGS>" }
+	funcMap["logs_comment_end"] = func () template.HTML { return "</LOGS> -->" }
+	funcMap["has_field"] = func (arg interface{}, field string) bool {
+		v := reflect.Indirect(reflect.ValueOf(arg))
+		f, exists := v.Type().FieldByName(field)
+		log.Printf("%v has field '%s': %b (%s)\n", arg, field, exists, f)
+		return exists
+	}
+	
+	return template.Must(template.New(tplName).Funcs(funcMap).ParseFiles("res/tpl/layout.tpl", filename))
 }
 
-var Ping = compile("ping", template.FuncMap{})
+func Render(w http.ResponseWriter, tpl *template.Template, args interface{}) error {
+	return tpl.ExecuteTemplate(w, "layout", args)
+}
+
+var Front = compile("front", template.FuncMap{})
 
 var Movie = compile("movie", template.FuncMap{
 	"field": func (field string) template.HTML {
 		if field == "" || field == "N/A" {
 			return "<i>N/A</i>"
 		}
-		return template.HTML(field)
+		// Escape manually.
+		return template.HTML(template.HTMLEscapeString(field))
 	},
 })
 
@@ -40,3 +62,5 @@ var Movies = compile("movies", template.FuncMap{
 })
 
 var Status = compile("status", template.FuncMap{})
+
+var Ping = compile("ping", template.FuncMap{})
