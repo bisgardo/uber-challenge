@@ -8,8 +8,13 @@
 	<tr><td>Render time</td><td>{{ .Time }} ms</td></tr>
 </table>
 
-<h2>DB table sizes</h2>
+<h2>Database</h2>
 <table>
+	<tr>
+		<th>Table</th>
+		<th>Size</th>
+		<th>Query time</th>
+	</tr>
 	<tr>
 		<td>#Movies</td>
 		<td>{{ .MoviesCount }}</td>

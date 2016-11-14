@@ -9,10 +9,7 @@ import (
 	"src/logging"
 	"src/watch"
 	"appengine"
-	"appengine/urlfetch"
 	"net/http"
-	"net/url"
-	"io/ioutil"
 	"database/sql"
 	"encoding/json"
 	"strings"
@@ -54,10 +51,13 @@ func init() {
 			return err
 		}
 		
+		ctx := appengine.NewContext(r)
+		version := appengine.VersionID(ctx)
 		args := &struct {
-			Clock string
-			Time  int64
-		}{sw.InitTime.String(), sw.TotalElapsedTimeMillis()}
+			Clock   string
+			Time    int64
+			Version string
+		}{sw.InitTime.String(), sw.TotalElapsedTimeMillis(), version}
 		
 		if err := tpl.Render(w, tpl.Ping, args); err != nil {
 			return err
@@ -122,8 +122,11 @@ func render(renderer func(w http.ResponseWriter, r *http.Request, logger logging
 }
 
 func front(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
+	ctx := appengine.NewContext(r)
+	version := appengine.VersionID(ctx)
 	args := &struct {
-	}{}
+		Version string
+	}{version}
 	
 	return tpl.Render(w, tpl.About, args)
 }
@@ -180,11 +183,14 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	info.Director = m.Director
 	info.Released = strconv.Itoa(m.ReleaseYear)
 	
+	ctx := appengine.NewContext(r)
+	version := appengine.VersionID(ctx)
 	args := &struct {
 		Subtitle string
 		Movie    *types.Movie
 		Info     *MovieInfo
-	}{info.Title, &m, &info}
+		Version  string
+	}{info.Title, &m, &info, version}
 	
 	if infoJson, err := sqldb.LoadMovieInfoJson(db, m.Title, logger); infoJson != "" && err == nil {
 		// Only attempt to parse JSON if it was loaded successfully
@@ -196,7 +202,7 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	return tpl.Render(w, tpl.Movie, args)
 }
 
-func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error {
+func movies(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
 	defer recordingLogger.Clear()
 	
 	logger.Infof("Rendering movie list page")
@@ -219,11 +225,15 @@ func movies(w http.ResponseWriter, _ *http.Request, logger logging.Logger) error
 	
 	logger.Infof("Clearing recording logger")
 	
+	ctx := appengine.NewContext(r)
+	version := appengine.VersionID(ctx)
+	
 	args := &struct {
 		Logs       []string
 		Movies     []types.IdMoviePair
 		OutputLogs bool
-	}{recordingLogger.Entries, ms, true}
+		Version    string
+	}{recordingLogger.Entries, ms, true, version}
 	
 	if err := tpl.Render(w, tpl.Movies, args); err != nil {
 		return err
@@ -267,7 +277,7 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	if err != nil {
 		return err
 	}
-	if err := sqldb.StoreMovies(db, ms, logger); err != nil {
+	if err := sqldb.InitTablesAndStoreMovies(db, ms, logger); err != nil {
 		return err
 	}
 	
@@ -286,7 +296,7 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 			continue
 		}
 		
-		infoJson, err := fetchMovieInfo(t, ctx, logger)
+		infoJson, err := fetch.FetchMovieInfo(t, ctx, logger)
 		if err != nil {
 			return err
 		}
@@ -312,32 +322,6 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	
 	http.Redirect(w, r, "", http.StatusFound)
 	return nil
-}
-
-// TODO Move function...
-func fetchMovieInfo(title string, ctx appengine.Context, logger logging.Logger) (string, error) {
-	// TODO Sanitize title...
-	
-	u := "http://www.omdbapi.com/?y=&plot=short&r=json&t=" + url.QueryEscape(title)
-	
-	sw := watch.NewStopWatch()
-	
-	logger.Infof("Fetching info for movie '%s' from URL '%s'", title, u)
-	client := urlfetch.Client(ctx)
-	resp, err := client.Get(u)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	
-	bytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	
-	logger.Infof("Fetched %d bytes in %d ms", len(bytes), sw.TotalElapsedTimeMillis())
-	
-	return string(bytes), nil
 }
 
 func renderStatus(w http.ResponseWriter, r *http.Request) {
@@ -377,7 +361,7 @@ func status(w http.ResponseWriter, r *http.Request) error {
 	}
 	
 	if initialized {
-		querySingleInt := func (db *sql.DB, sql string, args ...interface{}) (int, error) {
+		querySingleInt := func(db *sql.DB, sql string, args ...interface{}) (int, error) {
 			row := db.QueryRow(sql, args...)
 			var i int
 			err := row.Scan(&i)
@@ -423,6 +407,8 @@ func status(w http.ResponseWriter, r *http.Request) error {
 	
 	dt := sw.TotalElapsedTimeMillis()
 	
+	version := appengine.VersionID(ctx)
+	
 	args := struct {
 		Clock            string
 		Time             int64
@@ -440,7 +426,8 @@ func status(w http.ResponseWriter, r *http.Request) error {
 		InfoTime         int64
 		RecordedErr      error
 		RecordedLog      []string
-	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog}
+		Version          string
+	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog, version}
 	
 	return tpl.Render(w, tpl.Status, args)
 }

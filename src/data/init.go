@@ -31,7 +31,7 @@ func Init(db *sql.DB, filename string, logger logging.Logger) (bool, error) {
 		return true, err
 	}
 	
-	return true, sqldb.InitTablesAndInsertMovies(db, ms, logger)
+	return true, sqldb.InitTablesAndStoreMovies(db, ms, logger)
 }
 
 func IsInitialized(db *sql.DB) (bool, error) {

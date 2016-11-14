@@ -11,12 +11,12 @@ import (
 
 // TODO Turn bulk insertion stuff into nice utility (that is safe regarding injection and missing data) and replace current solutions with it...
 
-func InitTablesAndInsertMovies(db *sql.DB, ms []types.Movie, logger logging.Logger) error {
+func InitTablesAndStoreMovies(db *sql.DB, ms []types.Movie, logger logging.Logger) error {
 	return transaction(db, func (tx *sql.Tx) error {
 		if err := InitTables(tx, logger); err != nil {
 			return err
 		}
-		if err := InsertMovies(tx, ms, logger); err != nil {
+		if err := StoreMovies(tx, ms, logger); err != nil {
 			return err
 		}
 		return nil
@@ -139,7 +139,7 @@ func escapeSingleQuotes(s string) string {
 	return strings.Replace(s, "'", "\\'", -1)
 }
 
-func InsertMovies(tx *sql.Tx, ms []types.Movie, logger logging.Logger) error {
+func StoreMovies(tx *sql.Tx, ms []types.Movie, logger logging.Logger) error {
 	if len(ms) == 0 {
 		return nil
 	}
@@ -321,19 +321,6 @@ func actorIdMap(tx *sql.Tx) (map[string]int64, error) {
 	})
 	return m, err
 }
-
-func StoreMovies(db *sql.DB, ms []types.Movie, logger logging.Logger) error {
-	return transaction(db, func (tx *sql.Tx) error {
-		if err := InitTables(tx, logger); err != nil {
-			return err
-		}
-		if err := InsertMovies(tx, ms, logger); err != nil {
-			return err
-		}
-		return nil
-	})
-}
-
 
 func StoreMovieInfo(db *sql.DB, movieInfo map[string]string, logger logging.Logger) error {
 	if len(movieInfo) == 0 {

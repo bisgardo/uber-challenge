@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"log"
 	"appengine"
+	"net/url"
+	"src/watch"
 )
 
 type entry struct {
@@ -146,4 +148,29 @@ func entryToLocation(e entry) (l types.Location) {
 
 func defined(s string) bool {
 	return s != "" && s != "N/A"
+}
+
+func FetchMovieInfo(title string, ctx appengine.Context, logger logging.Logger) (string, error) {
+	// TODO Sanitize title...
+	
+	u := "http://www.omdbapi.com/?y=&plot=short&r=json&t=" + url.QueryEscape(title)
+	
+	sw := watch.NewStopWatch()
+	
+	logger.Infof("Fetching info for movie '%s' from URL '%s'", title, u)
+	client := urlfetch.Client(ctx)
+	resp, err := client.Get(u)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	
+	bytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	
+	logger.Infof("Fetched %d bytes in %d ms", len(bytes), sw.TotalElapsedTimeMillis())
+	
+	return string(bytes), nil
 }

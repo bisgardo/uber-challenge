@@ -37,8 +37,8 @@
 		{{ template "content" . }}
 		
 		<hr>
-		<small style="float:left"><a href="/ping">Ping</a></small>
-		<small style="float:right"><code>favicon.ico</code> thief-stolen from <a href="https://www.omdbapi.com/">OMDB</a></small>
+		<small style="float:left">Version: {{ .Version }} &middot; <a href="/ping">Ping</a></small>
+		<small style="float:right">Favicon thief-stolen from <a href="https://www.omdbapi.com/favicon.ico">OMDB</a></small>
 	</div>
 </div>
 </body>

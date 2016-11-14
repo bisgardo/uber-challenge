@@ -2,8 +2,6 @@
 
 <h1>{{ .Movie.Title }}</h1>
 
-
-
 <table>
 	<tr>
 		{{ $info := .Info }}
