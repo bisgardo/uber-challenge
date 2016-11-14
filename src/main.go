@@ -47,8 +47,16 @@ func init() {
 	http.HandleFunc("/update", render(update, true))
 	http.HandleFunc("/ping", render(func(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
 		sw := watch.NewStopWatch()
-		if err := db.Ping(); err != nil {
+		//err := db.Ping()
+		row := db.QueryRow("SELECT 42")
+		
+		var _42 int
+		if err := row.Scan(&_42); err != nil {
 			return err
+		}
+		
+		if _42 != 42 {
+			return errors.New("Invalid response from DB")
 		}
 		
 		ctx := appengine.NewContext(r)
@@ -67,7 +75,7 @@ func init() {
 	
 	// TODO Make "raw data dump" page.
 	
-	// TODO Add pages for movie, actor, ...
+	// TODO Add pages for actor, ...
 	
 	http.HandleFunc("/status", renderStatus)
 }
@@ -148,7 +156,7 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	
 	logger.Infof("Rendering movie with ID %d", mId)
 	
-	m, err := sqldb.LoadMovie(db, mId)
+	m, err := sqldb.LoadMovie(db, int64(mId), logger)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Movie with ID %d not found", mId), http.StatusNotFound)
 		return nil

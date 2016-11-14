@@ -46,8 +46,8 @@ Problems and solutions
 ### Go
 
 1.  The officially recommended tool for package management in Go is `go get`, which has the perplexingly obvious
-    problem of not referring to versioned libraries (for ensuring that we (a) use stable libraries and (b) make builds
-    reproducible). It also turns one's workspace into a mess unless annoying work-arounds are applied.
+    shortcoming of not referring to versioned libraries (for ensuring that builds are reproducible and uses stable
+    libraries). It also turns one's workspace into a mess unless annoying work-arounds are applied.
     
     **Solution** The [Glide tool](https://glide.sh/) allows one to keep dependency information in a file (`glide.yaml`)
     along the lines of Maven (for Java), npm (node.js), etc. Other package management tools for Go exist as well.

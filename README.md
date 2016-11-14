@@ -16,11 +16,8 @@ first experience with both of these technologies.
 
 The data is intended to stored in Cloud SQL, which is an App Engine variant of MySQL.
 
-During development, Go App Engine SDK 1.9.40 (which includes Go 1.6.2) and MySQL 5.7.16 were used. At the time of this
-writing, Cloud SQL is based on MySQL 5.7.
-
-Currently, the only part of the application that has been implemented (and only partially), is the part of the backend
-that initializes and updates the movie data.
+The project was developed with Go App Engine SDK 1.9.40 (which includes Go 1.6.2) and MySQL 5.7.16 on a Windows 7 box.
+At the time of this writing, Cloud SQL ("second generation") is based on MySQL 5.7.
 
 ### Life cycle
 
@@ -59,4 +56,4 @@ Running locally:
 ### Problems
 
 During development, a number of problems were encountered and solved. These lessons learned have been written down in
-`problems.md` for later retrieval.
+[`problems.md`](https://github.com/halleknast/uber-challenge/blob/master/problems.md) for later retrieval.

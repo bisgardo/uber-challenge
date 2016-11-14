@@ -11,6 +11,10 @@
 	<script src="https://cdn.jsdelivr.net/foundation/6.2.4/foundation.min.js"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/chosen/1.6.2/chosen.jquery.min.js"></script>
 	<script src="/autocomplete.js"></script>
+	
+	<script>
+		jQuery(document).foundation();
+	</script>
 </head>
 <body>
 
@@ -37,7 +41,7 @@
 		{{ template "content" . }}
 		
 		<hr>
-		<small style="float:left">Version: {{ .Version }} &middot; <a href="/ping">Ping</a></small>
+		<small style="float:left">Version: {{ .Version }} &middot; <a href="/ping">Ping</a> &middot; <a href="/data">Data</a></small>
 		<small style="float:right">Favicon thief-stolen from <a href="https://www.omdbapi.com/favicon.ico">OMDB</a></small>
 	</div>
 </div>

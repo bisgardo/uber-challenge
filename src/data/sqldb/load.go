@@ -55,6 +55,8 @@ func LoadMovies(db *sql.DB, logger logging.Logger, optimize bool) ([]types.IdMov
 			}
 		}
 		
+		// TODO Load actors...
+		
 		return nil
 	})
 	if err != nil {
@@ -170,13 +172,13 @@ func LoadMovieInfoJsons(db *sql.DB, logger logging.Logger) (map[string]string, e
 }
 
 
-func LoadMovie(db *sql.DB, id int) (types.Movie, error) {
+func LoadMovie(db *sql.DB, id int64, logger logging.Logger) (types.Movie, error) {
 	var m types.Movie
 	err := transaction(db, func (tx *sql.Tx) error {
 		row := tx.QueryRow("SELECT * FROM movies WHERE id = ?", id)
 		
 		var dummy int
-		return row.Scan(
+		err := row.Scan(
 			&dummy,
 			&m.Title,
 			&m.Writer,
@@ -185,6 +187,12 @@ func LoadMovie(db *sql.DB, id int) (types.Movie, error) {
 			&m.ProductionCompany,
 			&m.ReleaseYear,
 		)
+		if err != nil {
+			return err
+		}
+		
+		// TODO Load actors too?
+		return LoadLocations(tx, id, &m.Locations, logger)
 	})
 	return m, err
 }

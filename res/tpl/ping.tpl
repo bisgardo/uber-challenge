@@ -4,7 +4,7 @@
 <h2>Time</h2>
 <table>
 	<tr><td>Clock</td><td>{{ .Clock }}</td></tr>
-	<tr><td>Ping time</td><td>{{ .Time }} ms</td></tr>
+	<tr><td>Database ping time</td><td>{{ .Time }} ms</td></tr>
 </table>
 
 {{ end }}
