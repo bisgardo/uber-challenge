@@ -3,6 +3,7 @@ package fetch
 import (
 	"src/data/types"
 	"src/logging"
+	"src/config"
 	"src/watch"
 	"appengine"
 	"appengine/urlfetch"
@@ -11,6 +12,8 @@ import (
 	"net/url"
 	"strconv"
 	"log"
+	"fmt"
+	"errors"
 )
 
 type entry struct {
@@ -173,4 +176,49 @@ func FetchMovieInfo(title string, ctx appengine.Context, logger logging.Logger) 
 	logger.Infof("Fetched %d bytes in %d ms", len(bytes), sw.TotalElapsedTimeMillis())
 	
 	return string(bytes), nil
+}
+
+func FetchLocationCoordinates(location string, ctx appengine.Context, logger logging.Logger) (types.Coordinates, error) {
+	u := fmt.Sprintf(
+		"https://maps.googleapis.com/maps/api/geocode/json?address=%s,+CA&key=%s",
+		url.QueryEscape(location),
+		config.MapsApiKey(),
+	)
+	
+	sw := watch.NewStopWatch()
+	
+	logger.Infof("Fetching coordinates of location '%s' from URL '%s'", location, u)
+	client := urlfetch.Client(ctx)
+	resp, err := client.Get(u)
+	if err != nil {
+		return types.Coordinates{}, err
+	}
+	defer resp.Body.Close()
+	
+	bytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return types.Coordinates{}, err
+	}
+	
+	var res struct {
+		Results []struct {
+			Geometry struct {
+				Location types.Coordinates
+			}
+		}
+		Status  string
+	}
+	if err := json.Unmarshal(bytes, &res); err != nil {
+		return types.Coordinates{}, err
+	}
+	
+	logger.Infof("%+v", res)
+	
+	logger.Infof("Fetched %d bytes in %d ms", len(bytes), sw.TotalElapsedTimeMillis())
+	
+	if res.Status != "OK" {
+		return types.Coordinates{}, errors.New("Address not found")
+	}
+	
+	return res.Results[0].Geometry.Location, nil
 }

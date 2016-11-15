@@ -1,3 +1,5 @@
+'use strict';
+
 jQuery(function ($, undefined) {
 	var $select = $('<select>', {
 		'data-placeholder': "Select a movie"

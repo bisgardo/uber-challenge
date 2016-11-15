@@ -51,6 +51,7 @@ Running locally:
 *   Add a file named `data-source-name` in the `res` (resource) directory. The contents on the file should be a string
     of the format `root:[root-password]@/locations` without any newlines (it is assumed that you connect though the
     server's root user).
+*   Obtain a API key to Google Maps and put it in a file (`res/maps-api-key`); also with no whitespace.
 *   [TODO Add description of running using `goapp` or IntelliJ with appropriate plugin(s).]
 
 ### Problems

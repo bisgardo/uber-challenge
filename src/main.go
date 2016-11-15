@@ -130,7 +130,7 @@ func render(renderer func(w http.ResponseWriter, r *http.Request, logger logging
 	}
 }
 
-func front(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
+func front(w http.ResponseWriter, r *http.Request, _ logging.Logger) error {
 	ctx := appengine.NewContext(r)
 	version := appengine.VersionID(ctx)
 	args := &struct {
@@ -162,6 +162,9 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 		http.Error(w, fmt.Sprintf("Movie with ID %d not found", mId), http.StatusNotFound)
 		return nil
 	}
+	
+	logger.Infof("Loading coordinates")
+	sqldb.LoadCoordinates(db, m.Locations, logger)
 	
 	type MovieInfo struct {
 		Title      string
@@ -290,7 +293,6 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	}
 	
 	// Fetch movie data.
-	// TODO Parallelize and use memcached (with expiration) instead of SQL.
 	mi, err := sqldb.LoadMovieInfoJsons(db, logger)
 	if err != nil {
 		return err
@@ -326,7 +328,41 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 		return err
 	}
 	
-	// TODO Fetch geo locations.
+	ns, err := sqldb.LoadLocationNamesWithCoordinates(db, logger)
+	if err != nil {
+		return err
+	}
+	
+	// Fetch geo locations.
+	lc := make(map[string]*types.Coordinates)
+	for _, n := range ns {
+		lc[n] = nil
+	}
+	
+	for _, m := range ms {
+		// TODO Very slow - parallelize!!
+		
+		for _, l := range m.Locations {
+			n := strings.TrimSpace(l.Name)
+			if _, exists := lc[n]; exists {
+				continue
+			}
+			
+			cs, err := fetch.FetchLocationCoordinates(n, ctx, logger)
+			if err != nil {
+				logger.Infof("Coordinates could not be fetched for location %s", n)
+				continue
+			}
+			logger.Infof("Fetched coordinates (%f, %f) for location %s", cs.Lat, cs.Lng, n)
+			
+			lc[n] = &cs
+		}
+	}
+	
+	// Store coordinates.
+	if err := sqldb.StoreCoordinates(db, lc, logger); err != nil {
+		return err
+	}
 	
 	http.Redirect(w, r, "", http.StatusFound)
 	return nil

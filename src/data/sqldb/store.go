@@ -235,15 +235,50 @@ func StoreMovieInfo(db *sql.DB, movieInfo map[string]string, logger logging.Logg
 			//}
 		}
 		
-		if len(movieInfo) > 0 {
-			insertStmt := "INSERT INTO movie_info VALUES" + vals
-			logger.Debugf("Executing query %s", insertStmt)
-			if _, err := tx.Exec(insertStmt); err != nil {
-				return err
-			}
+		insertStmt := "INSERT INTO movie_info VALUES" + vals
+		logger.Debugf("Executing query %s", insertStmt)
+		if _, err := tx.Exec(insertStmt); err != nil {
+			return err
 		}
 		
 		logger.Infof("Inserted %d movie infos in %d ms", len(movieInfo), sw.TotalElapsedTimeMillis())
+		return nil
+	})
+}
+
+func StoreCoordinates(db *sql.DB, lc map[string]*types.Coordinates, logger logging.Logger) error {
+	if len(lc) == 0 {
+		return nil
+	}
+	
+	logger.Infof("Inserting %d location coordinates into database", len(lc))
+	
+	logger.Infof("%+v", lc)
+	
+	return transaction(db, func (tx *sql.Tx) error {
+		sw := watch.NewStopWatch()
+		
+		vals := ""
+		
+		for n, c := range lc {
+			if c == nil {
+				continue
+			}
+			// TODO Make robust towards injection!
+			val := fmt.Sprintf("\n('%s', %f, %f)", escapeSingleQuotes(n), c.Lat, c.Lng)
+			if len(vals) > 0 {
+				vals += ","
+			}
+			vals += val
+		}
+		
+		insertStmt := "INSERT INTO coordinates VALUES" + vals
+		logger.Debugf("Executing query %s", insertStmt)
+		if _, err := tx.Exec(insertStmt); err != nil {
+			return err
+		}
+		
+		logger.Infof("Inserted %d location coordinate pairs in %d ms", len(lc), sw.TotalElapsedTimeMillis())
 		return nil
 	})
 }

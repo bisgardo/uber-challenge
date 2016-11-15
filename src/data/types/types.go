@@ -12,8 +12,14 @@ type Movie struct {
 }
 
 type Location struct {
-	Name    string
-	FunFact string
+	Name        string
+	FunFact     string
+	Coordinates Coordinates
+}
+
+type Coordinates struct {
+	Lat float32
+	Lng float32
 }
 
 type IdMoviePair struct {

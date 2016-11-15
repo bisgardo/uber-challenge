@@ -101,23 +101,6 @@ func LoadAllLocations(tx *sql.Tx, idMovieMap map[int64]*types.Movie, logger logg
 	})
 }
 
-//func LoadPositionNames(tx *sql.Tx) ([]string, error) {
-//	rows, err := tx.Query("SELECT location_name FROM coordinates")
-//	if err != nil {
-//		return nil, err
-//	}
-//	
-//	var names []string
-//	err = ForEachRow(rows, func (rows *sql.Rows) error {
-//		var name string
-//		rows.Scan(&name)
-//		names = append(names, name)
-//		return nil
-//	})
-//	
-//	return names, err
-//}
-
 func LoadMovieInfoJson(db *sql.DB, title string, logger logging.Logger) (string, error) {
 	sw := watch.NewStopWatch()
 	
@@ -135,6 +118,8 @@ func LoadMovieInfoJson(db *sql.DB, title string, logger logging.Logger) (string,
 }
 
 func LoadMovieInfoJsons(db *sql.DB, logger logging.Logger) (map[string]string, error) {
+	// TODO Parallelize (if the API allows it) and consider using memcached (with expiration) instead of SQL.
+	
 	sw := watch.NewStopWatch()
 	movieInfo := make(map[string]string)
 	err := transaction(db, func (tx *sql.Tx) error {
@@ -185,4 +170,79 @@ func LoadMovie(db *sql.DB, id int64, logger logging.Logger) (types.Movie, error)
 		return LoadLocations(tx, id, &m.Locations, logger)
 	})
 	return m, err
+}
+
+func LoadLocationNamesWithCoordinates(db *sql.DB, logger logging.Logger) ([]string, error) {
+	sw := watch.NewStopWatch()
+	
+	var names []string
+	err := transaction(db, func(tx *sql.Tx) error {
+		rows, err := tx.Query("SELECT location_name FROM coordinates")
+		if err != nil {
+			return err
+		}
+		
+		return forEachRow(rows, func (rows *sql.Rows) error {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				return err
+			}
+			names = append(names, name)
+			return nil
+		})
+	})
+	
+	if err == nil {
+		logger.Infof("Fetched %d coordinated locations %d ms", len(names), sw.TotalElapsedTimeMillis())
+	}
+	
+	return names, err
+}
+
+func LoadCoordinates(db *sql.DB, locations []types.Location, logger logging.Logger) error {
+	sw := watch.NewStopWatch()
+	
+	m := make(map[string]*types.Location)
+	var names string
+	// Iterate without copying.
+	for i := range locations {
+		l := &locations[i]
+		name := l.Name
+		m[name] = l;
+		
+		if len(names) > 0 {
+			names += ", "
+		}
+		// TODO Make injection-safe...
+		names += "'" + escapeSingleQuotes(name) + "'"
+	}
+	
+	err := transaction(db, func (tx *sql.Tx) error {
+		stmt := "SELECT location_name, lat, lng FROM coordinates WHERE location_name IN (" + names + ")"
+		logger.Infof("Executing query '%s'", stmt)
+		
+		rows, err := tx.Query(stmt)
+		if err != nil {
+			return err
+		}
+		
+		return forEachRow(rows, func (rows *sql.Rows) error {
+			var n string
+			var lat float32
+			var lng float32
+			err := rows.Scan(&n, &lat, &lng)
+			if err != nil {
+				return err
+			}
+			cs := &m[n].Coordinates
+			cs.Lat = lat
+			cs.Lng = lng
+			return nil
+		})
+	})
+	
+	if err == nil {
+		logger.Infof("Fetched %d coordinated locations %d ms", len(names), sw.TotalElapsedTimeMillis())
+	}
+	return err
 }

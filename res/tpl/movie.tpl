@@ -1,5 +1,11 @@
 {{ define "content" }}
 
+<style>
+	.location:hover {
+		background-color: lightgray;
+	}
+</style>
+
 <h1>{{ .Movie.Title }}</h1>
 
 <ul class="tabs" data-tabs id="movie-tabs">
@@ -13,11 +19,17 @@
 			<div class="medium-8 columns">
 				<div id="map" style="width:100%;height:600px"></div>
 			</div>
-			<div class="medium-4 columns">
+			<div class="medium-4 columns" style="height:600px;overflow:auto">
 				<h5>{{ len .Movie.Locations }} location(s)</h5>
 				{{ range .Movie.Locations }}
-					<div class="callout">
-						{{ .Name }} {{ if .FunFact }}<hr><em>{{ .FunFact }}<em>{{ end }}
+					<div class="callout location" data-name="{{ .Name }}" data-lat="{{ .Coordinates.Lat }}" data-lng="{{ .Coordinates.Lng }}">
+						{{ .Name }}
+						{{ if .FunFact }}
+							<hr>
+							<em>
+								{{ .FunFact }}
+							</em>
+						{{ end }}
 					</div>
 				{{ end }}
 			</div>
@@ -105,19 +117,7 @@
 	</div>
 </div>
 
-<script>
-	function initMap() {
-		var sf = {lat: 37.749, lng: -122.439};
-		var map = new google.maps.Map(document.getElementById('map'), {
-			zoom: 11,
-			center: sf
-		});
-		var marker = new google.maps.Marker({
-			position: sf,
-			map: map
-		});
-	}
-</script>
+<script src="/location-map.js"></script>
 <script async defer src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&callback=initMap"></script>
 
 {{ end }}
