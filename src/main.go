@@ -27,6 +27,8 @@ var recordingLogger logging.RecordingLogger
 var recordedLog []string
 var recordedError error
 
+var mapsApiKey = config.MapsApiKey()
+
 func init() {
 	var logger logging.InitLogger
 	recordingLogger.Wrap(&logger)
@@ -164,7 +166,37 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	}
 	
 	logger.Infof("Loading coordinates")
-	sqldb.LoadCoordinates(db, m.Locations, logger)
+	coords, err := sqldb.LoadCoordinates(db, m.Locations, logger)
+	
+	missingCoords := make(map[string]*types.Coordinates)
+	for _, location := range m.Locations {
+		name := location.Name
+		if _, exists := coords[name]; !exists {
+			missingCoords[name] = nil
+		}
+	}
+	
+	// Load missing coordinates.
+	ctx := appengine.NewContext(r)
+	sqldb.LocationNames(missingCoords, func (count int) int { return 100 * count }, ctx, logger)
+	
+	// Store missing coordinates.
+	if err := sqldb.StoreCoordinates(db, missingCoords, logger); err != nil {
+		return err
+	}
+	
+	// Add missing coordinates to `coords`.
+	for n, c := range missingCoords {
+		if c != nil {
+			coords[n] = *c
+		}
+	}
+	
+	// Set coordinates on locations.
+	for i := range m.Locations {
+		location := &m.Locations[i]
+		location.Coordinates = coords[location.Name]
+	}
 	
 	type MovieInfo struct {
 		Title      string
@@ -195,7 +227,6 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	info.Director = m.Director
 	info.Released = strconv.Itoa(m.ReleaseYear)
 	
-	ctx := appengine.NewContext(r)
 	version := appengine.VersionID(ctx)
 	args := &struct {
 		Subtitle string
@@ -325,42 +356,6 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	
 	// Store movie data.
 	if err := sqldb.StoreMovieInfo(db, movieTitleInfo, logger); err != nil {
-		return err
-	}
-	
-	ns, err := sqldb.LoadLocationNamesWithCoordinates(db, logger)
-	if err != nil {
-		return err
-	}
-	
-	// Fetch geo locations.
-	lc := make(map[string]*types.Coordinates)
-	for _, n := range ns {
-		lc[n] = nil
-	}
-	
-	for _, m := range ms {
-		// TODO Very slow - parallelize!!
-		
-		for _, l := range m.Locations {
-			n := strings.TrimSpace(l.Name)
-			if _, exists := lc[n]; exists {
-				continue
-			}
-			
-			cs, err := fetch.FetchLocationCoordinates(n, ctx, logger)
-			if err != nil {
-				logger.Infof("Coordinates could not be fetched for location %s", n)
-				continue
-			}
-			logger.Infof("Fetched coordinates (%f, %f) for location %s", cs.Lat, cs.Lng, n)
-			
-			lc[n] = &cs
-		}
-	}
-	
-	// Store coordinates.
-	if err := sqldb.StoreCoordinates(db, lc, logger); err != nil {
 		return err
 	}
 	

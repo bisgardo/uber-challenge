@@ -3,7 +3,6 @@ package fetch
 import (
 	"src/data/types"
 	"src/logging"
-	"src/config"
 	"src/watch"
 	"appengine"
 	"appengine/urlfetch"
@@ -14,6 +13,8 @@ import (
 	"log"
 	"fmt"
 	"errors"
+	"strings"
+	"regexp"
 )
 
 type entry struct {
@@ -112,55 +113,63 @@ func entriesToMovies(es []entry) []types.Movie {
 
 func entryToMovie(e entry) (m types.Movie) {
 	// "Location"/"Fun fact" is added in `entryToLocation` below.
-	if defined(e.Title) {
-		m.Title = e.Title
-	}
-	if defined(e.Actor_1) {
+	m.Title = cleaned(e.Title)
+	
+	cleanedActor1 := cleaned(e.Actor_1)
+	cleanedActor2 := cleaned(e.Actor_2)
+	cleanedActor3 := cleaned(e.Actor_3)
+	
+	if cleanedActor1 != "" {
 		m.Actors = append(m.Actors, e.Actor_1)
 	}
-	if defined(e.Actor_2) {
+	if cleanedActor2 != "" {
 		m.Actors = append(m.Actors, e.Actor_2)
 	}
-	if defined(e.Actor_3) {
+	if cleanedActor3 != "" {
 		m.Actors = append(m.Actors, e.Actor_3)
 	}
-	if defined(e.Director) {
-		m.Director = e.Director
+	
+	m.Director = cleaned(e.Director)
+	m.ProductionCompany = cleaned(e.Production_company)
+	
+	cleanedReleaseYear := cleaned(e.Release_year)
+	if cleanedReleaseYear != "" {
+		m.ReleaseYear, _ = strconv.Atoi(cleanedReleaseYear)
 	}
-	if defined(e.Production_company) {
-		m.ProductionCompany = e.Production_company
-	}
-	if defined(e.Release_year) {
-		m.ReleaseYear, _ = strconv.Atoi(e.Release_year)
-	}
-	if defined(e.Writer) {
-		m.Writer = e.Writer
-	}
+	
+	m.Writer = cleaned(e.Writer)
+	
 	return
 }
 
 func entryToLocation(e entry) (l types.Location) {
-	if defined(e.Locations) {
-		l.Name = e.Locations
-	}
-	if defined(e.Fun_facts) {
-		l.FunFact = e.Fun_facts
-	}
+	l.Name = cleaned(e.Locations)
+	l.FunFact = cleaned(e.Fun_facts)
 	return
 }
 
-func defined(s string) bool {
-	return s != "" && s != "N/A"
+func cleaned(s string) string {
+	ts := strings.TrimSpace(s)
+	if ts == "N/A" {
+		return ""
+	}
+	return ts
 }
 
 func FetchMovieInfo(title string, ctx appengine.Context, logger logging.Logger) (string, error) {
-	// TODO Sanitize title...
+	// Sanitize movie title.
+	regex, err := regexp.Compile("(?i)\\s*(-|,|season).*")
+	if err != nil {
+		panic(err)
+	}
 	
-	u := "http://www.omdbapi.com/?y=&plot=short&r=json&t=" + url.QueryEscape(title)
+	sanitizedTitle := regex.ReplaceAllString(title, "")
+	
+	u := "http://www.omdbapi.com/?y=&plot=short&r=json&t=" + url.QueryEscape(sanitizedTitle)
 	
 	sw := watch.NewStopWatch()
 	
-	logger.Infof("Fetching info for movie '%s' from URL '%s'", title, u)
+	logger.Infof("Fetching info for movie '%s' ('%s') from URL '%s'", title, sanitizedTitle, u)
 	client := urlfetch.Client(ctx)
 	resp, err := client.Get(u)
 	if err != nil {
@@ -178,11 +187,11 @@ func FetchMovieInfo(title string, ctx appengine.Context, logger logging.Logger) 
 	return string(bytes), nil
 }
 
-func FetchLocationCoordinates(location string, ctx appengine.Context, logger logging.Logger) (types.Coordinates, error) {
+func FetchLocationCoordinates(mapsApiKey string, location string, ctx appengine.Context, logger logging.Logger) (types.Coordinates, error) {
 	u := fmt.Sprintf(
-		"https://maps.googleapis.com/maps/api/geocode/json?address=%s,+CA&key=%s",
+		"https://maps.googleapis.com/maps/api/geocode/json?address=%s,San+Fransisco,+CA&key=%s",
 		url.QueryEscape(location),
-		config.MapsApiKey(),
+		mapsApiKey,
 	)
 	
 	sw := watch.NewStopWatch()
@@ -202,9 +211,8 @@ func FetchLocationCoordinates(location string, ctx appengine.Context, logger log
 	
 	var res struct {
 		Results []struct {
-			Geometry struct {
-				Location types.Coordinates
-			}
+			Formatted_Address string
+			Geometry          struct { Location types.Coordinates }
 		}
 		Status  string
 	}
@@ -212,13 +220,27 @@ func FetchLocationCoordinates(location string, ctx appengine.Context, logger log
 		return types.Coordinates{}, err
 	}
 	
-	logger.Infof("%+v", res)
-	
 	logger.Infof("Fetched %d bytes in %d ms", len(bytes), sw.TotalElapsedTimeMillis())
 	
-	if res.Status != "OK" {
+	result := res.Results[0]
+	if res.Status != "OK" || result.Formatted_Address == "California, USA" {
+		// Error or generic response. Look for nested address.
+		leftParIndex := strings.Index(location, "(")
+		rightParIndex := strings.Index(location, ")")
+		
+		if 0 <= leftParIndex && leftParIndex < rightParIndex {
+			subLocation := strings.TrimSpace(location[leftParIndex + 1 : rightParIndex])
+			return FetchLocationCoordinates(mapsApiKey, subLocation, ctx, logger)
+		}
+		
+		commaIndex := strings.Index(location, ",")
+		if 0 <= commaIndex {
+			subLocation := strings.TrimSpace(location[commaIndex + 1 : rightParIndex])
+			return FetchLocationCoordinates(mapsApiKey, subLocation, ctx, logger)
+		}
+		
+		// Consider this a non-match.
 		return types.Coordinates{}, errors.New("Address not found")
 	}
-	
-	return res.Results[0].Geometry.Location, nil
+	return result.Geometry.Location, nil
 }

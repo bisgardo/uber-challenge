@@ -11,7 +11,7 @@ Uber challenge: San Francisco Movies
 
 ### Implementation
 
-The project was implemented in Go and [deployed](https://uber-challenge-148819.appspot.com) on Google's App Engine as my
+The project is implemented in Go and [deployed](https://uber-challenge-148819.appspot.com) on Google's App Engine as my
 first experience with both of these technologies.
 
 The data is intended to stored in Cloud SQL, which is an App Engine variant of MySQL.
@@ -22,12 +22,13 @@ At the time of this writing, Cloud SQL ("second generation") is based on MySQL 5
 ### Life cycle
 
 When the application starts up, it checks if the database is empty and initializes it with data from a cached file if it
-isn't. When the `/update` endpoint is hit with a HTTP POST-request, the database is cleared and reinitialized with fresh
-data from the data set link above. For robustness, the "original" initialization also happens if the database is
-suddenly empty (i.e., we can delete and recreate it from the console without restarting the application).
+isn't. When the `/update` endpoint is hit with a HTTP POST-request (e.g. using the button on the movie list page at
+`/movie`), the database is cleared and reinitialized with fresh data from the data set link above. For robustness, the
+"original" initialization also happens if the database is suddenly empty (i.e., we can delete and recreate it from the
+console without restarting the application).
 
 The tables sizes of the SQL database and the log/error of the last (re)initialization/update are accessible on the
-`/status` endpoint.
+"Status" page.
 
 ### Setup
 
@@ -47,7 +48,8 @@ The tables sizes of the SQL database and the log/error of the last (re)initializ
 
 Running locally:
 
-*   Install a MySQL server.
+*   Install a MySQL server and create the database `locations` from the console using the command
+    `create database locations;`.
 *   Add a file named `data-source-name` in the `res` (resource) directory. The contents on the file should be a string
     of the format `root:[root-password]@/locations` without any newlines (it is assumed that you connect though the
     server's root user).
@@ -58,3 +60,40 @@ Running locally:
 
 During development, a number of problems were encountered and solved. These lessons learned have been written down in
 [`problems.md`](https://github.com/halleknast/uber-challenge/blob/master/problems.md) for later retrieval.
+
+### Missing features
+
+Due to the fact that many new things had to be learned and dealt with to make this project in a limited amount of time,
+the following features have been left unimplemented. While they are non-essential for a working prototype, they would
+be needed for the project to be production-ready.
+
+*   Testing: The whole system has been manually tested to work as intended, but should be covered by a test suite before
+    implementing new features.
+*   There is currently nothing to prevent multiple app instances from updating the database simultaneously. While
+    critical parts are done transactionally, weird inconsistencies have been observed. The task should be performed by a
+    batch job and be limited in how often it can execute.
+*   Geolocations are currently fetched and cached (concurrently) on demand when a movie is loaded. Because of timing
+    constraints, it cannot be done for all movies at once (on update) - even with concurrent requests. This fetching
+    should be performed in such a way that redundant queries to the Geolocation API are minimized and uniqueness
+    constraint violations in the database avoided. Also, negative lookups are not cached.
+*   Movie info data should expire such that at least ratings are updated once in a while.
+*   The statements that insert data in the database in bulk are built using naive string concatenation and is
+    susceptible to injection attacks (although all data is currently coming from more or less trusted sources). This
+    should be replaced with "dynamic" prepared statements, or we should use a DB driver that supports bulk insertion.
+
+### Other ideas for future work
+
+*   Figure out why Cloud SQL is so slow (a simple table count takes more than 100 ms) and try using other storage
+    strategies if it can't be improved.
+*   The quality of the data set linked above is quite bad. It could help a lot if users were able add the coordinates of
+    a location (e.g. by giving an address), and possibly other pieces of data as well.
+*   Add pages for people (actors, writers, and directors) and list the locations of 
+*   Add an element of sightseeing: Show route (e.g. with directions) for a number of locations. This could be all
+    locations of a movie, one location of some number of movies, or something else. The user could be able to order the
+    locations using drag/drop or the system could compute a shortest route or something. And of course order an Uber car
+    for this purpose.
+*   Add a social element: Users could add trivia about the locations, times and images of a location appearing in a
+    movie, appearing actors, pictures and ratings of locations, recommendations of tours, etc.
+*   The main data structure `Movie` (defined in `types.go`) is used in all layers of the application; from parsing JSON
+    to rendering in view templates. The structure is "patched" with the data needed by a given view. While this approach
+    works well for the project at its current size, it probably doesn't scale well with complexity.

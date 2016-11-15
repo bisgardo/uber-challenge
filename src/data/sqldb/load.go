@@ -172,34 +172,7 @@ func LoadMovie(db *sql.DB, id int64, logger logging.Logger) (types.Movie, error)
 	return m, err
 }
 
-func LoadLocationNamesWithCoordinates(db *sql.DB, logger logging.Logger) ([]string, error) {
-	sw := watch.NewStopWatch()
-	
-	var names []string
-	err := transaction(db, func(tx *sql.Tx) error {
-		rows, err := tx.Query("SELECT location_name FROM coordinates")
-		if err != nil {
-			return err
-		}
-		
-		return forEachRow(rows, func (rows *sql.Rows) error {
-			var name string
-			if err := rows.Scan(&name); err != nil {
-				return err
-			}
-			names = append(names, name)
-			return nil
-		})
-	})
-	
-	if err == nil {
-		logger.Infof("Fetched %d coordinated locations %d ms", len(names), sw.TotalElapsedTimeMillis())
-	}
-	
-	return names, err
-}
-
-func LoadCoordinates(db *sql.DB, locations []types.Location, logger logging.Logger) error {
+func LoadCoordinates(db *sql.DB, locations []types.Location, logger logging.Logger) (map[string]types.Coordinates, error) {
 	sw := watch.NewStopWatch()
 	
 	m := make(map[string]*types.Location)
@@ -216,6 +189,8 @@ func LoadCoordinates(db *sql.DB, locations []types.Location, logger logging.Logg
 		// TODO Make injection-safe...
 		names += "'" + escapeSingleQuotes(name) + "'"
 	}
+	
+	res := make(map[string]types.Coordinates)
 	
 	err := transaction(db, func (tx *sql.Tx) error {
 		stmt := "SELECT location_name, lat, lng FROM coordinates WHERE location_name IN (" + names + ")"
@@ -234,15 +209,15 @@ func LoadCoordinates(db *sql.DB, locations []types.Location, logger logging.Logg
 			if err != nil {
 				return err
 			}
-			cs := &m[n].Coordinates
-			cs.Lat = lat
-			cs.Lng = lng
+			
+			res[n] = types.Coordinates{Lat: lat, Lng: lng}
 			return nil
 		})
 	})
 	
 	if err == nil {
-		logger.Infof("Fetched %d coordinated locations %d ms", len(names), sw.TotalElapsedTimeMillis())
+		logger.Infof("Fetched %d coordinated locations in %d ms", len(res), sw.TotalElapsedTimeMillis())
 	}
-	return err
+	
+	return res, err
 }

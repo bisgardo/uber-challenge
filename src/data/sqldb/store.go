@@ -253,8 +253,6 @@ func StoreCoordinates(db *sql.DB, lc map[string]*types.Coordinates, logger loggi
 	
 	logger.Infof("Inserting %d location coordinates into database", len(lc))
 	
-	logger.Infof("%+v", lc)
-	
 	return transaction(db, func (tx *sql.Tx) error {
 		sw := watch.NewStopWatch()
 		
@@ -272,10 +270,13 @@ func StoreCoordinates(db *sql.DB, lc map[string]*types.Coordinates, logger loggi
 			vals += val
 		}
 		
-		insertStmt := "INSERT INTO coordinates VALUES" + vals
-		logger.Debugf("Executing query %s", insertStmt)
-		if _, err := tx.Exec(insertStmt); err != nil {
-			return err
+		// Need check because map may contain only 'nil' values.
+		if vals != "" {
+			insertStmt := "INSERT INTO coordinates VALUES" + vals
+			logger.Debugf("Executing query %s", insertStmt)
+			if _, err := tx.Exec(insertStmt); err != nil {
+				return err
+			}
 		}
 		
 		logger.Infof("Inserted %d location coordinate pairs in %d ms", len(lc), sw.TotalElapsedTimeMillis())
