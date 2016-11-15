@@ -1,4 +1,4 @@
-package uber_challenge
+package config
 
 import "io/ioutil"
 
@@ -21,4 +21,12 @@ func LocalDbSourceName() string {
 
 func CloudDbSourceName() string {
 	return "root@cloudsql(uber-challenge-148819:europe-west1:movie-locations)/locations"
+}
+
+func MapsApiKey() string {
+	bytes, err := ioutil.ReadFile("res/maps-api-key")
+	if err != nil {
+		panic(err)
+	}
+	return string(bytes)
 }

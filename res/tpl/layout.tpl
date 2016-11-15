@@ -13,7 +13,9 @@
 	<script src="/autocomplete.js"></script>
 	
 	<script>
-		jQuery(document).foundation();
+		jQuery(function ($) {
+			$(document).foundation();
+		});
 	</script>
 </head>
 <body>

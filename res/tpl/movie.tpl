@@ -2,16 +2,16 @@
 
 <h1>{{ .Movie.Title }}</h1>
 
-<ul class="tabs" data-tabs id="example-tabs">
-	<li class="tabs-title is-active"><a href="#map" aria-selected="true">Map</a></li>
-	<li class="tabs-title"><a href="#info">Info</a></li>
+<ul class="tabs" data-tabs id="movie-tabs">
+	<li class="tabs-title is-active"><a href="#tab-map" aria-selected="true">Map</a></li>
+	<li class="tabs-title"><a href="#tab-info">Info</a></li>
 </ul>
 
-<div class="tabs-content" data-tabs-content="example-tabs">
-	<div class="tabs-panel is-active" id="map">
+<div class="tabs-content" data-tabs-content="movie-tabs">
+	<div class="tabs-panel is-active" id="tab-map">
 		<div class="row">
 			<div class="medium-8 columns">
-				[TODO Map...]
+				<div id="map" style="width:100%;height:600px"></div>
 			</div>
 			<div class="medium-4 columns">
 				<h5>{{ len .Movie.Locations }} location(s)</h5>
@@ -23,7 +23,7 @@
 			</div>
 		</div>
 	</div>
-	<div class="tabs-panel" id="info">
+	<div class="tabs-panel" id="tab-info">
 		<div class="row">
 			<div class="row">
 				<div class="medium-4 columns">
@@ -104,5 +104,20 @@
 		</div>
 	</div>
 </div>
+
+<script>
+	function initMap() {
+		var sf = {lat: 37.749, lng: -122.439};
+		var map = new google.maps.Map(document.getElementById('map'), {
+			zoom: 11,
+			center: sf
+		});
+		var marker = new google.maps.Marker({
+			position: sf,
+			map: map
+		});
+	}
+</script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key={{ maps_api_key }}&callback=initMap"></script>
 
 {{ end }}

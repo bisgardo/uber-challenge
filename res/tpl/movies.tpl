@@ -1,10 +1,10 @@
 {{ define "content" }}
 
-{{ logs_comment_begin }}
+{{ comment_begin }} BEGIN LOGS
     {{ range .Logs }}
 		{{ . }}
 	{{ end }}
-{{ logs_comment_end }}
+END LOGS {{ comment_end }}
 
 <h1>All movies</h1>
 

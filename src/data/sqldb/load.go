@@ -10,7 +10,7 @@ import (
 
 // TODO Replace '*' in selects with explicit column names for robustness.
 
-func LoadMovies(db *sql.DB, logger logging.Logger, optimize bool) ([]types.IdMoviePair, error) {
+func LoadMovies(db *sql.DB, logger logging.Logger) ([]types.IdMoviePair, error) {
 	var ms []types.IdMoviePair
 	
 	err := transaction(db, func (tx *sql.Tx) error {
@@ -38,21 +38,11 @@ func LoadMovies(db *sql.DB, logger logging.Logger, optimize bool) ([]types.IdMov
 		}
 		
 		ms = make([]types.IdMoviePair, 0, len(idMovieMap))
-		if optimize {
-			if err := LoadAllLocations(tx, idMovieMap, logger); err != nil {
-				return err
-			}
-			for mId, m := range idMovieMap {
-				ms = append(ms, types.IdMoviePair{mId, *m})
-			}
-		} else {
-			for mId, m := range idMovieMap {
-				if err := LoadLocations(tx, mId, &m.Locations, logger); err != nil {
-					return err
-				}
-				
-				ms = append(ms, types.IdMoviePair{mId, *m})
-			}
+		if err := LoadAllLocations(tx, idMovieMap, logger); err != nil {
+			return err
+		}
+		for mId, m := range idMovieMap {
+			ms = append(ms, types.IdMoviePair{mId, *m})
 		}
 		
 		// TODO Load actors...

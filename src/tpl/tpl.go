@@ -1,6 +1,7 @@
 package tpl
 
 import (
+	"src/config"
 	"strings"
 	"html/template"
 	"net/http"
@@ -15,12 +16,16 @@ func compile(name string, funcMap template.FuncMap) *template.Template {
 	tplName := name + extension
 	filename := "res/tpl/" + tplName
 	
-	funcMap["logs_comment_begin"] = func () template.HTML { return "<!-- <LOGS>" }
-	funcMap["logs_comment_end"] = func () template.HTML { return "</LOGS> -->" }
+	// Writing comments with functions is needed to prevent engine from filtering them out.
+	funcMap["comment_begin"] = func () template.HTML { return "<!--" }
+	funcMap["comment_end"] = func () template.HTML { return "-->" }
 	funcMap["has_field"] = func (arg interface{}, field string) bool {
 		v := reflect.Indirect(reflect.ValueOf(arg))
 		_, exists := v.Type().FieldByName(field)
 		return exists
+	}
+	funcMap["maps_api_key"] = func () string {
+		return config.MapsApiKey()
 	}
 	
 	return template.Must(template.New(tplName).Funcs(funcMap).ParseFiles("res/tpl/layout.tpl", filename))

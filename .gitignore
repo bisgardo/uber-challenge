@@ -26,4 +26,5 @@ _testmain.go
 .*
 !.gitignore
 res/data-source-name
+res/maps-api-key
 *.iml

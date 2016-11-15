@@ -3,14 +3,14 @@ package fetch
 import (
 	"src/data/types"
 	"src/logging"
+	"src/watch"
+	"appengine"
+	"appengine/urlfetch"
 	"io/ioutil"
 	"encoding/json"
-	"appengine/urlfetch"
+	"net/url"
 	"strconv"
 	"log"
-	"appengine"
-	"net/url"
-	"src/watch"
 )
 
 type entry struct {

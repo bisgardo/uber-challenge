@@ -1,10 +1,11 @@
-package uber_challenge
+package app
 
 import (
 	"src/data"
 	"src/data/types"
 	"src/data/sqldb"
 	"src/data/fetch"
+	"src/config"
 	"src/tpl"
 	"src/logging"
 	"src/watch"
@@ -92,10 +93,10 @@ func Open(logger logging.Logger) error {
 	var err error
 	if appengine.IsDevAppServer() {
 		logger.Infof("Running in development mode")
-		db, err = sql.Open("mysql", LocalDbSourceName())
+		db, err = sql.Open("mysql", config.LocalDbSourceName())
 	} else {
 		logger.Infof("Running in production mode")
-		db, err = sql.Open("mysql", CloudDbSourceName())
+		db, err = sql.Open("mysql", config.CloudDbSourceName())
 	}
 	return err
 }
@@ -104,7 +105,7 @@ func OpenInit(logger logging.Logger) error {
 	if err := Open(logger); err != nil {
 		return err
 	}
-	if _, err := data.Init(db, JsonFileName(), logger); err != nil {
+	if _, err := data.Init(db, config.JsonFileName(), logger); err != nil {
 		return err
 	}
 	return nil
@@ -216,7 +217,7 @@ func movies(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	logger.Infof("Rendering movie list page")
 	
 	// Check if database is initialized and load from file if it isn't.
-	initialized, err := data.Init(db, JsonFileName(), logger)
+	initialized, err := data.Init(db, config.JsonFileName(), logger)
 	if initialized {
 		recordInitUpdate(err)
 	}
@@ -224,7 +225,7 @@ func movies(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 		return err
 	}
 	
-	ms, err := sqldb.LoadMovies(db, logger, true)
+	ms, err := sqldb.LoadMovies(db, logger)
 	if err != nil {
 		return err
 	}
@@ -250,13 +251,12 @@ func movies(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	return nil
 }
 
+// TODO Have one endpoint with only data needed for autocomplete and one with *all* data.
+
 func dataJson(w http.ResponseWriter, r *http.Request) {
-	//time.Sleep(1000000000)
-	
 	ctx := appengine.NewContext(r)
 	
-	// TODO Only load movies...
-	ms, err := sqldb.LoadMovies(db, ctx, true)
+	ms, err := sqldb.LoadMovies(db, ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -281,7 +281,7 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	data.InitUpdateMutex.Lock()
 	defer data.InitUpdateMutex.Unlock()
 	
-	ms, err := fetch.FetchFromUrl(ServiceUrl(), ctx, logger)
+	ms, err := fetch.FetchFromUrl(config.ServiceUrl(), ctx, logger)
 	if err != nil {
 		return err
 	}
