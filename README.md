@@ -1,6 +1,8 @@
 Uber challenge: San Francisco Movies
 ------------------------------------
 
+This project is an implementation of the following "Uber Coding Challenge":
+
 [Project description](https://github.com/uber/coding-challenge-tools/blob/master/coding_challenge.md):
 
 > Create a service that shows on a map where movies have been filmed in San Francisco. The user should be able to filter
@@ -19,6 +21,8 @@ The data is intended to stored in Cloud SQL, which is an App Engine variant of M
 The project was developed with Go App Engine SDK 1.9.40 (which includes Go 1.6.2) and MySQL 5.7.16 on a Windows 7 box.
 At the time of this writing, Cloud SQL ("second generation") is based on MySQL 5.7.
 
+The client side is implemented with the [Foundation](http://foundation.zurb.com/) front-end framework and jQuery.
+
 ### Life cycle
 
 When the application starts up, it checks if the database is empty and initializes it with data from a cached file if it
@@ -28,7 +32,11 @@ isn't. When the `/update` endpoint is hit with a HTTP POST-request (e.g. using t
 console without restarting the application).
 
 The tables sizes of the SQL database and the log/error of the last (re)initialization/update are accessible on the
-"Status" page.
+"status" page.
+
+### Features
+
+See the ["About"](https://uber-challenge-148819.appspot.com/) page of the deployed application.
 
 ### Setup
 
@@ -87,7 +95,8 @@ be needed for the project to be production-ready.
     strategies if it can't be improved.
 *   The quality of the data set linked above is quite bad. It could help a lot if users were able add the coordinates of
     a location (e.g. by giving an address), and possibly other pieces of data as well.
-*   Add pages for people (actors, writers, and directors) and list the locations of 
+*   Add pages for people (actors, writers, and directors) and list the movies that they participated in and the
+    locations of these movies.
 *   Add an element of sightseeing: Show route (e.g. with directions) for a number of locations. This could be all
     locations of a movie, one location of some number of movies, or something else. The user could be able to order the
     locations using drag/drop or the system could compute a shortest route or something. And of course order an Uber car
@@ -95,5 +104,5 @@ be needed for the project to be production-ready.
 *   Add a social element: Users could add trivia about the locations, times and images of a location appearing in a
     movie, appearing actors, pictures and ratings of locations, recommendations of tours, etc.
 *   The main data structure `Movie` (defined in `types.go`) is used in all layers of the application; from parsing JSON
-    to rendering in view templates. The structure is "patched" with the data needed by a given view. While this approach
-    works well for the project at its current size, it probably doesn't scale well with complexity.
+    to rendering in view templates. The data in this structure is "patched" with the data needed by a given view. While
+    this approach works well for the project at its current complexity, it probably doesn't scale well.
