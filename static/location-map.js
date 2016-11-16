@@ -10,13 +10,12 @@ function initMap() {
 	
 	var $locations = $('.location');
 	
+	var bounds = new google.maps.LatLngBounds();
 	$locations.each(function () {
 		var $location = $(this);
 		var name = $location.data('name');
 		var lat = $location.data('lat');
 		var lng = $location.data('lng');
-		
-		console.log(lat, lng);
 		
 		if (lat && lng) {
 			var marker = new google.maps.Marker({
@@ -33,16 +32,26 @@ function initMap() {
 			}, function () {
 				marker.setAnimation(null);
 				$location.removeClass('secondary');
-			})
+			});
 			
 			marker.addListener('mouseover', function () {
 				$location.addClass('primary');
+				var locationElement = $location[0];
+				locationElement.scrollIntoView && locationElement.scrollIntoView({
+					behavior: 'smooth'
+				});
 			});
 			marker.addListener('mouseout', function () {
 				$location.removeClass('primary');
 			});
+			
+			bounds.extend(marker.getPosition());
 		} else {
 			$location.addClass('warning').attr('title', 'Could not find coordinates for this location...');
 		}
 	});
+	
+	if (!bounds.isEmpty()) {
+		map.fitBounds(bounds);
+	}
 }

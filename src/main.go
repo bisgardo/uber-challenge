@@ -178,7 +178,8 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	
 	// Load missing coordinates.
 	ctx := appengine.NewContext(r)
-	sqldb.LocationNames(missingCoords, func (count int) int { return 100 * count }, ctx, logger)
+	delayFunc := func (count int) int { return 50 * count }
+	fetch.FetchMissingLocationNames(missingCoords, delayFunc, mapsApiKey, ctx, logger)
 	
 	// Store missing coordinates.
 	if err := sqldb.StoreCoordinates(db, missingCoords, logger); err != nil {

@@ -21,12 +21,13 @@ The data is intended to stored in Cloud SQL, which is an App Engine variant of M
 The project was developed with Go App Engine SDK 1.9.40 (which includes Go 1.6.2) and MySQL 5.7.16 on a Windows 7 box.
 At the time of this writing, Cloud SQL ("second generation") is based on MySQL 5.7.
 
-The client side is implemented with the [Foundation](http://foundation.zurb.com/) front-end framework and jQuery.
+The client side is implemented with the [Foundation](http://foundation.zurb.com/) front-end framework and jQuery and has
+been tested in Chrome 54, Firefox 47, and Internet Explorer 11 on Windows 7.
 
 ### Life cycle
 
 When the application starts up, it checks if the database is empty and initializes it with data from a cached file if it
-isn't. When the `/update` endpoint is hit with a HTTP POST-request (e.g. using the button on the movie list page at
+is. When the `/update` endpoint is hit with a HTTP POST-request (e.g. using the button on the movie list page at
 `/movie`), the database is cleared and reinitialized with fresh data from the data set link above. For robustness, the
 "original" initialization also happens if the database is suddenly empty (i.e., we can delete and recreate it from the
 console without restarting the application).
@@ -76,7 +77,7 @@ the following features have been left unimplemented. While they are non-essentia
 be needed for the project to be production-ready.
 
 *   Testing: The whole system has been manually tested to work as intended, but should be covered by a test suite before
-    implementing new features.
+    implementing new features. Also, types and functions should be properly documented.
 *   There is currently nothing to prevent multiple app instances from updating the database simultaneously. While
     critical parts are done transactionally, weird inconsistencies have been observed. The task should be performed by a
     batch job and be limited in how often it can execute.
@@ -97,6 +98,7 @@ be needed for the project to be production-ready.
     a location (e.g. by giving an address), and possibly other pieces of data as well.
 *   Add pages for people (actors, writers, and directors) and list the movies that they participated in and the
     locations of these movies.
+*   Enable users to find movie locations near some location (e.g. their physical location).
 *   Add an element of sightseeing: Show route (e.g. with directions) for a number of locations. This could be all
     locations of a movie, one location of some number of movies, or something else. The user could be able to order the
     locations using drag/drop or the system could compute a shortest route or something. And of course order an Uber car

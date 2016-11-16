@@ -6,7 +6,6 @@ import (
 	"src/watch"
 	"database/sql"
 	"fmt"
-	"strings"
 )
 
 // TODO Turn bulk insertion stuff into nice utility (that is safe regarding injection and missing data) and replace current solutions with it...
@@ -21,10 +20,6 @@ func InitTablesAndStoreMovies(db *sql.DB, ms []types.Movie, logger logging.Logge
 		}
 		return nil
 	})
-}
-
-func escapeSingleQuotes(s string) string {
-	return strings.Replace(s, "'", "\\'", -1)
 }
 
 func StoreMovies(tx *sql.Tx, ms []types.Movie, logger logging.Logger) error {

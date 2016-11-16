@@ -3,18 +3,13 @@ package fetch
 import (
 	"src/data/types"
 	"src/logging"
-	"src/watch"
 	"appengine"
 	"appengine/urlfetch"
 	"io/ioutil"
 	"encoding/json"
-	"net/url"
 	"strconv"
 	"log"
-	"fmt"
-	"errors"
 	"strings"
-	"regexp"
 )
 
 type entry struct {
@@ -154,93 +149,4 @@ func cleaned(s string) string {
 		return ""
 	}
 	return ts
-}
-
-func FetchMovieInfo(title string, ctx appengine.Context, logger logging.Logger) (string, error) {
-	// Sanitize movie title.
-	regex, err := regexp.Compile("(?i)\\s*(-|,|season).*")
-	if err != nil {
-		panic(err)
-	}
-	
-	sanitizedTitle := regex.ReplaceAllString(title, "")
-	
-	u := "http://www.omdbapi.com/?y=&plot=short&r=json&t=" + url.QueryEscape(sanitizedTitle)
-	
-	sw := watch.NewStopWatch()
-	
-	logger.Infof("Fetching info for movie '%s' ('%s') from URL '%s'", title, sanitizedTitle, u)
-	client := urlfetch.Client(ctx)
-	resp, err := client.Get(u)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-	
-	bytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-	
-	logger.Infof("Fetched %d bytes in %d ms", len(bytes), sw.TotalElapsedTimeMillis())
-	
-	return string(bytes), nil
-}
-
-func FetchLocationCoordinates(mapsApiKey string, location string, ctx appengine.Context, logger logging.Logger) (types.Coordinates, error) {
-	u := fmt.Sprintf(
-		"https://maps.googleapis.com/maps/api/geocode/json?address=%s,San+Fransisco,+CA&key=%s",
-		url.QueryEscape(location),
-		mapsApiKey,
-	)
-	
-	sw := watch.NewStopWatch()
-	
-	logger.Infof("Fetching coordinates of location '%s' from URL '%s'", location, u)
-	client := urlfetch.Client(ctx)
-	resp, err := client.Get(u)
-	if err != nil {
-		return types.Coordinates{}, err
-	}
-	defer resp.Body.Close()
-	
-	bytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return types.Coordinates{}, err
-	}
-	
-	var res struct {
-		Results []struct {
-			Formatted_Address string
-			Geometry          struct { Location types.Coordinates }
-		}
-		Status  string
-	}
-	if err := json.Unmarshal(bytes, &res); err != nil {
-		return types.Coordinates{}, err
-	}
-	
-	logger.Infof("Fetched %d bytes in %d ms", len(bytes), sw.TotalElapsedTimeMillis())
-	
-	result := res.Results[0]
-	if res.Status != "OK" || result.Formatted_Address == "California, USA" {
-		// Error or generic response. Look for nested address.
-		leftParIndex := strings.Index(location, "(")
-		rightParIndex := strings.Index(location, ")")
-		
-		if 0 <= leftParIndex && leftParIndex < rightParIndex {
-			subLocation := strings.TrimSpace(location[leftParIndex + 1 : rightParIndex])
-			return FetchLocationCoordinates(mapsApiKey, subLocation, ctx, logger)
-		}
-		
-		commaIndex := strings.Index(location, ",")
-		if 0 <= commaIndex {
-			subLocation := strings.TrimSpace(location[commaIndex + 1 : rightParIndex])
-			return FetchLocationCoordinates(mapsApiKey, subLocation, ctx, logger)
-		}
-		
-		// Consider this a non-match.
-		return types.Coordinates{}, errors.New("Address not found")
-	}
-	return result.Geometry.Location, nil
 }

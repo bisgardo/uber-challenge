@@ -1,6 +1,9 @@
 package sqldb
 
-import "database/sql"
+import (
+	"database/sql"
+	"strings"
+)
 
 func forEachRow(rows *sql.Rows, callback func(*sql.Rows) error) error {
 	defer rows.Close()
@@ -20,6 +23,7 @@ func transaction(db *sql.DB, callback func (*sql.Tx) error) error {
 	if err != nil {
 		return err
 	}
+	// TODO What if rollback returns error?
 	defer tx.Rollback()
 	
 	if err := callback(tx); err != nil {
@@ -27,4 +31,8 @@ func transaction(db *sql.DB, callback func (*sql.Tx) error) error {
 	}
 	
 	return tx.Commit()
+}
+
+func escapeSingleQuotes(s string) string {
+	return strings.Replace(s, "'", "\\'", -1)
 }
