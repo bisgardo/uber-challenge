@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"strings"
 	"fmt"
-	"log"
 	"src/logging"
 )
 
@@ -21,7 +20,7 @@ func forEachRow(rows *sql.Rows, callback func(*sql.Rows) error) error {
 	return rows.Err()
 }
 
-func transaction(db *sql.DB, callback func (*sql.Tx) error) error {
+func transaction(db *sql.DB, callback func(*sql.Tx) error) error {
 	tx, err := db.Begin()
 	if err != nil {
 		return err
@@ -40,46 +39,45 @@ func escapeSingleQuotes(s string) string {
 	return strings.Replace(s, "'", "\\'", -1)
 }
 
-type BatchInsertStmtBuilder struct {
-	colCount   int
-	prpStmtStr string
-	valuesStmt string
-	values     []interface{}
+type BulkInsertStmtBuilder struct {
+	colCount int
+	rowCount int
+	values   []interface{}
 }
 
-func NewBulkInserter(colCount int) BatchInsertStmtBuilder {
-	qstComRep := strings.Repeat("?,", colCount)
-	prpStmtStr := "(" + qstComRep[:len(qstComRep)-1] + ")"
-	
-	log.Println(prpStmtStr)
-	
-	return BatchInsertStmtBuilder{colCount: colCount, prpStmtStr: prpStmtStr}
+func NewBulkInserter(colCount int) BulkInsertStmtBuilder {
+	return BulkInsertStmtBuilder{colCount: colCount, rowCount: 0}
 }
 
-func (b *BatchInsertStmtBuilder) Add(values ...interface{}) *BatchInsertStmtBuilder {
+func (b *BulkInsertStmtBuilder) Add(values ...interface{}) *BulkInsertStmtBuilder {
 	if len(values) != b.colCount {
 		panic(fmt.Sprintf("Expected %d values but got %d", b.colCount, len(values)))
 	}
 	
-	// TODO Although this isn't a performance bottleneck, string should be built in a buffer ala Java's `StringBuilder`.
-	if len(b.valuesStmt) > 0 {
-		b.valuesStmt += ","
-	}
-	b.valuesStmt += b.prpStmtStr
-	
 	b.values = append(b.values, values...)
+	b.rowCount++
 	
+	// Allow chaining.
 	return b
 }
 
-func (b *BatchInsertStmtBuilder) build(tableName string) string {
+func (b *BulkInsertStmtBuilder) build(tableName string) string {
+	if (b.rowCount * b.colCount != len(b.values)) {
+		panic("Unexpected number of values...")
+	}
+	
 	if len(b.values) == 0 {
 		return "";
 	}
-	return "INSERT INTO " + tableName + " VALUES" + b.valuesStmt
+	
+	// Construct string with format "(?, ?, ..., ?)".
+	prpStmtStr := fancyRepeat("(", "?", b.colCount, ",", ")")
+	
+	// Construct string with format "INSERT INTO table VALUES prpStmtStr, prpStmtStr, ..., prpStmtStr".
+	return fancyRepeat("INSERT INTO " + tableName + " VALUES", prpStmtStr, b.rowCount, ",", "")
 }
 
-func (b *BatchInsertStmtBuilder) Exec(tx *sql.Tx, tableName string, logger logging.Logger) (sql.Result, error) {
+func (b *BulkInsertStmtBuilder) Exec(tx *sql.Tx, tableName string, logger logging.Logger) (sql.Result, error) {
 	if len(b.values) == 0 {
 		return nil, nil
 	}
@@ -89,4 +87,9 @@ func (b *BatchInsertStmtBuilder) Exec(tx *sql.Tx, tableName string, logger loggi
 		logger.Debugf("Executing query '%s' with values %s", stmt, fmt.Sprintln(b.values))
 	}
 	return tx.Exec(stmt, b.values...)
+}
+
+func fancyRepeat(prefix string, rep string, count int, sep string, suffix string) string {
+	repeated := strings.Repeat(rep + sep, count)
+	return prefix + repeated[:len(repeated) - len(sep)] + suffix
 }

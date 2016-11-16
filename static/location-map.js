@@ -52,6 +52,7 @@ function initMap() {
 	});
 	
 	if (!bounds.isEmpty()) {
+		bounds.extend(sf);
 		map.fitBounds(bounds);
 	}
 }
