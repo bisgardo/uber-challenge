@@ -71,7 +71,7 @@ func (b *BulkInsertStmtBuilder) build(tableName string) string {
 	}
 	
 	// Construct string with format "(?, ?, ..., ?)".
-	prpStmtStr := fancyRepeat("(", "?", b.colCount, ",", ")")
+	prpStmtStr := fancyRepeat("(", "?", b.colCount, ", ", ")")
 	
 	// Construct string with format "INSERT INTO table VALUES prpStmtStr, prpStmtStr, ..., prpStmtStr".
 	return fancyRepeat("INSERT INTO " + tableName + " VALUES", prpStmtStr, b.rowCount, ",", "")

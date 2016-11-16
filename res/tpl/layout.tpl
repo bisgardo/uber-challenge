@@ -7,7 +7,7 @@
 	{{ end }}
 END LOGS {{ comment_end }}
 <head>
-	<title>SF Movies {{ if has_field . "Subtitle" }} | {{ .Subtitle }} {{ end }}</title>
+	<title>SF Movies {{ if .Subtitle }} | {{ .Subtitle }} {{ end }}</title>
 	
 	<link rel="stylesheet" href="https://cdn.jsdelivr.net/foundation/6.2.4/foundation.min.css">
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chosen/1.6.2/chosen.css">

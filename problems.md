@@ -51,7 +51,3 @@ Problems and solutions
     
     **Solution** The [Glide tool](https://glide.sh/) allows one to keep dependency information in a file (`glide.yaml`)
     along the lines of Maven (for Java), npm (node.js), etc. Other package management tools for Go exist as well.
-
-2.  [TODO html/template: escaping, whitespace, functions, content type]
-
-[TODO About pointers to interfaces?]

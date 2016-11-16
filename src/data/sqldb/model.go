@@ -92,6 +92,8 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 	}
 	
 	logger.Infof("Creating table 'coordinates' unless it already exists")
+	// As the table is intended to act as a cache that survives updates, `location_name` is not constrained to reference
+	// an actual location name.
 	_, err = tx.Exec(
 		`CREATE TABLE IF NOT EXISTS coordinates (
 			location_name VARCHAR(255) PRIMARY KEY,
@@ -104,6 +106,8 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 	}
 	
 	logger.Infof("Creating table 'movie_info' unless it already exists")
+	// As the table is intended to act as a cache that survives updates, `movie_title` is not constrained to reference
+	// an actual movie title.
 	_, err = tx.Exec(
 		`CREATE TABLE IF NOT EXISTS movie_info (
 			movie_title VARCHAR(255) PRIMARY KEY,
