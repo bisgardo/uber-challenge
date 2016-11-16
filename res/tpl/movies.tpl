@@ -1,11 +1,5 @@
 {{ define "content" }}
 
-{{ comment_begin }} BEGIN LOGS
-    {{ range .Logs }}
-		{{ . }}
-	{{ end }}
-END LOGS {{ comment_end }}
-
 <h1>All movies</h1>
 
 <form action="/update" method="post">

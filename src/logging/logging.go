@@ -6,11 +6,9 @@ import (
 	"log"
 )
 
-// TODO Add facade with functions for setting logger level
+// TODO Add facade with functions for setting logging output level.
 
-// TODO Make thread-safe! Instead of globally wrapping logger, a request method should have it's own wrapper of both the recorder and the actual logger
-
-// Copied from App Engine Context.
+// Copied from `appengine.Context`.
 type Logger interface {
 	// Debugf formats its arguments according to the format, analogous to fmt.Printf,
 	// and records the text as a log message at Debug level.
@@ -29,76 +27,83 @@ type Logger interface {
 	Criticalf(format string, args ...interface{})
 }
 
-// TODO Make sure that "DEBUG(init)" etc. is also included in the recorded log.
-
 type InitLogger struct {
 }
+
 func (logger *InitLogger) Debugf(format string, args ...interface{}) {
 	log.Printf("DEBUG(init): " + format + "\n", args...)
 }
 func (logger *InitLogger) Infof(format string, args ...interface{}) {
 	log.Printf("INFO(init): " + format + "\n", args...)
 }
+
 func (logger *InitLogger) Warningf(format string, args ...interface{}) {
 	log.Printf("WARN(init): " + format + "\n", args...)
 }
+
 func (logger *InitLogger) Errorf(format string, args ...interface{}) {
 	log.Printf("ERROR(init): " + format + "\n", args...)
 }
+
 func (logger *InitLogger) Criticalf(format string, args ...interface{}) {
 	log.Printf("CRITICAL(init): " + format + "\n", args...)
 }
 
 type RecordingLogger struct {
-	Entries []string
 	wrapped Logger
+	init    bool
+	Entries []string
 }
 
-func (logger * RecordingLogger) Wrap(wrapped Logger) {
-	logger.wrapped = wrapped
-}
-func (logger * RecordingLogger) Unwrap() {
-	logger.wrapped = nil
+func NewRecordingLogger(wrapped Logger, init bool) *RecordingLogger {
+	return &RecordingLogger{wrapped: wrapped, init: init}
 }
 
-func (logger *RecordingLogger) add(kind string, format string, args ...interface{}) {
+func (l *RecordingLogger) add(kind string, format string, args ...interface{}) string {
 	ts := time.Now().String()
 	msg := fmt.Sprintf(format, args...)
-	entry := fmt.Sprintf("%s(%s): %s", kind, ts, msg)
-	logger.Entries = append(logger.Entries, entry)
+	
+	initString := ""
+	if l.init {
+		initString = "[init] "
+	}
+	fullMsg := fmt.Sprintf("(%s): %s%s", ts, initString, msg)
+	
+	l.Entries = append(l.Entries, kind + fullMsg)
+	return fullMsg
 }
 
-func (logger *RecordingLogger) Debugf(format string, args ...interface{}) {
-	logger.add("DEBUG", format, args...)
-	if logger.wrapped != nil {
-		logger.wrapped.Debugf(format, args...)
-	}
-}
-func (logger *RecordingLogger) Infof(format string, args ...interface{}) {
-	logger.add("INFO", format, args...)
-	if logger.wrapped != nil {
-		logger.wrapped.Infof(format, args...)
-	}
-}
-func (logger *RecordingLogger) Warningf(format string, args ...interface{}) {
-	logger.add("WARN", format, args...)
-	if logger.wrapped != nil {
-		logger.wrapped.Warningf(format, args...)
-	}
-}
-func (logger *RecordingLogger) Errorf(format string, args ...interface{}) {
-	logger.add("ERROR", format, args...)
-	if logger.wrapped != nil {
-		logger.wrapped.Errorf(format, args...)
-	}
-}
-func (logger *RecordingLogger) Criticalf(format string, args ...interface{}) {
-	logger.add("CRITICAL", format, args...)
-	if logger.wrapped != nil {
-		logger.wrapped.Criticalf(format, args...)
+func (l *RecordingLogger) Debugf(format string, args ...interface{}) {
+	msg := l.add("DEBUG", format, args...)
+	if l.wrapped != nil {
+		l.wrapped.Debugf(msg)
 	}
 }
 
-func (logger *RecordingLogger) Clear() {
-	logger.Entries = nil 
+func (l *RecordingLogger) Infof(format string, args ...interface{}) {
+	msg := l.add("INFO", format, args...)
+	if l.wrapped != nil {
+		l.wrapped.Infof(msg)
+	}
+}
+
+func (l *RecordingLogger) Warningf(format string, args ...interface{}) {
+	msg := l.add("WARN", format, args...)
+	if l.wrapped != nil {
+		l.wrapped.Warningf(msg)
+	}
+}
+
+func (l *RecordingLogger) Errorf(format string, args ...interface{}) {
+	msg := l.add("ERROR", format, args...)
+	if l.wrapped != nil {
+		l.wrapped.Errorf(msg)
+	}
+}
+
+func (l *RecordingLogger) Criticalf(format string, args ...interface{}) {
+	msg := l.add("CRITICAL", format, args...)
+	if l.wrapped != nil {
+		l.wrapped.Criticalf(msg)
+	}
 }

@@ -32,6 +32,7 @@ func compile(name string, funcMap template.FuncMap) *template.Template {
 }
 
 func Render(w http.ResponseWriter, tpl *template.Template, args interface{}) error {
+	// TODO Wrap `args` in object with log and version such that controller methods don't need to remember that.
 	return tpl.ExecuteTemplate(w, "layout", args)
 }
 

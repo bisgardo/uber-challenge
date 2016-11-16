@@ -1,6 +1,11 @@
 {{ define "layout" }}
 
 <html>
+{{ comment_begin }} BEGIN LOGS
+	{{ range .Logs }}
+		{{ . }}
+	{{ end }}
+END LOGS {{ comment_end }}
 <head>
 	<title>SF Movies {{ if has_field . "Subtitle" }} | {{ .Subtitle }} {{ end }}</title>
 	

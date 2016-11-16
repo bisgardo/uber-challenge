@@ -22,68 +22,46 @@ import (
 
 var db *sql.DB
 
-var recordingLogger logging.RecordingLogger
-
 var recordedLog []string
 var recordedError error
 
+var jsonFileName = config.JsonFileName()
 var mapsApiKey = config.MapsApiKey()
 
 func init() {
-	var logger logging.InitLogger
-	recordingLogger.Wrap(&logger)
-	defer recordingLogger.Unwrap()
+	logger := logging.NewRecordingLogger(&logging.InitLogger{}, true)
 	
-	recordingLogger.Infof("Spinning up instance with ID '%s'", appengine.InstanceID())
+	logger.Infof("Spinning up instance with ID '%s'", appengine.InstanceID())
 	
-	if err := OpenInit(&recordingLogger); err != nil {
-		recordInitUpdate(err)
+	err := openInit(logger)
+	recordInitUpdate(err, logger)
+	if err != nil {
 		panic(err)
 	}
 	
-	recordInitUpdate(nil)
-	
-	http.HandleFunc("/", render(front, false))
-	http.HandleFunc("/movie", render(movies, false))
-	http.HandleFunc("/data", dataJson)
-	http.HandleFunc("/movie/", render(movie, false))
-	http.HandleFunc("/update", render(update, true))
-	http.HandleFunc("/ping", render(func(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
-		sw := watch.NewStopWatch()
-		//err := db.Ping()
-		row := db.QueryRow("SELECT 42")
-		
-		var _42 int
-		if err := row.Scan(&_42); err != nil {
-			return err
-		}
-		
-		if _42 != 42 {
-			return errors.New("Invalid response from DB")
-		}
-		
-		ctx := appengine.NewContext(r)
-		version := appengine.VersionID(ctx)
-		args := &struct {
-			Clock   string
-			Time    int64
-			Version string
-		}{sw.InitTime.String(), sw.TotalElapsedTimeMillis(), version}
-		
-		if err := tpl.Render(w, tpl.Ping, args); err != nil {
-			return err
-		}
-		return nil
-	}, false))
+	http.HandleFunc("/", render(front))
+	http.HandleFunc("/movie", render(movies))
+	http.HandleFunc("/movie/", render(movie))
+	http.HandleFunc("/status", renderStatus)
+	http.HandleFunc("/update", renderUpdate)
+	http.HandleFunc("/ping", renderPing)
+	http.HandleFunc("/data", renderDataJson)
 	
 	// TODO Make "raw data dump" page.
-	
 	// TODO Add pages for actor, ...
-	
-	http.HandleFunc("/status", renderStatus)
 }
 
-func recordInitUpdate(err error) {
+func openInit(logger *logging.RecordingLogger) error {
+	if err := Open(logger); err != nil {
+		return err
+	}
+	if _, err := data.Init(db, jsonFileName, logger); err != nil {
+		return err
+	}
+	return nil
+}
+
+func recordInitUpdate(err error, recordingLogger *logging.RecordingLogger) {
 	recordedError = err
 	entries := recordingLogger.Entries
 	entriesCopy := make([]string, len(entries))
@@ -103,51 +81,40 @@ func Open(logger logging.Logger) error {
 	return err
 }
 
-func OpenInit(logger logging.Logger) error {
-	if err := Open(logger); err != nil {
-		return err
-	}
-	if _, err := data.Init(db, config.JsonFileName(), logger); err != nil {
-		return err
-	}
-	return nil
-}
-
-func render(renderer func(w http.ResponseWriter, r *http.Request, logger logging.Logger) error, record bool) func(w http.ResponseWriter, r *http.Request) {
+func render(renderer func(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := appengine.NewContext(r)
-		recordingLogger.Wrap(ctx)
-		defer recordingLogger.Unwrap()
+		logger := logging.NewRecordingLogger(ctx, false)
 		
-		if err := renderer(w, r, &recordingLogger); err != nil {
-			if record {
-				recordInitUpdate(err)
-			}
+		// Check if database is initialized and load from file if it isn't.
+		initialized, err := data.Init(db, jsonFileName, logger)
+		if initialized {
+			recordInitUpdate(err, logger)
+		}
+		
+		if err == nil {
+			err = renderer(w, r, logger)
+		}
+		
+		if err != nil {
 			ctx.Errorf("ERROR: %+v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
-		if record {
-			recordInitUpdate(nil)
-		}
 	}
 }
 
-func front(w http.ResponseWriter, r *http.Request, _ logging.Logger) error {
+func front(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
 	ctx := appengine.NewContext(r)
 	version := appengine.VersionID(ctx)
 	args := &struct {
+		Logs    []string
 		Version string
-	}{version}
+	}{logger.Entries, version}
 	
 	return tpl.Render(w, tpl.About, args)
 }
 
-func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
-	defer func() {
-		logger.Infof("Clearing recording logger")
-		recordingLogger.Clear()
-	}()
-	
+func movie(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
 	path := r.URL.Path
 	i := strings.LastIndex(path, "/")
 	id := path[i + 1:]
@@ -230,11 +197,12 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	
 	version := appengine.VersionID(ctx)
 	args := &struct {
+		Logs    []string
 		Subtitle string
 		Movie    *types.Movie
 		Info     *MovieInfo
 		Version  string
-	}{info.Title, &m, &info, version}
+	}{logger.Entries, info.Title, &m, &info, version}
 	
 	if infoJson, err := sqldb.LoadMovieInfoJson(db, m.Title, logger); infoJson != "" && err == nil {
 		// Only attempt to parse JSON if it was loaded successfully
@@ -246,28 +214,13 @@ func movie(w http.ResponseWriter, r *http.Request, logger logging.Logger) error 
 	return tpl.Render(w, tpl.Movie, args)
 }
 
-func movies(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
-	defer recordingLogger.Clear()
-	
+func movies(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
 	logger.Infof("Rendering movie list page")
-	
-	// Check if database is initialized and load from file if it isn't.
-	initialized, err := data.Init(db, config.JsonFileName(), logger)
-	if initialized {
-		recordInitUpdate(err)
-	}
-	if err != nil {
-		return err
-	}
 	
 	ms, err := sqldb.LoadMovies(db, logger)
 	if err != nil {
 		return err
 	}
-	
-	// TODO Block until geo locations and movie data are fetched (if we change 'update' into not blocking...).
-	
-	logger.Infof("Clearing recording logger")
 	
 	ctx := appengine.NewContext(r)
 	version := appengine.VersionID(ctx)
@@ -277,7 +230,7 @@ func movies(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 		Movies     []types.IdMoviePair
 		OutputLogs bool
 		Version    string
-	}{recordingLogger.Entries, ms, true, version}
+	}{logger.Entries, ms, true, version}
 	
 	if err := tpl.Render(w, tpl.Movies, args); err != nil {
 		return err
@@ -288,7 +241,7 @@ func movies(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 
 // TODO Have one endpoint with only data needed for autocomplete and one with *all* data.
 
-func dataJson(w http.ResponseWriter, r *http.Request) {
+func renderDataJson(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
 	
 	ms, err := sqldb.LoadMovies(db, ctx)
@@ -301,7 +254,22 @@ func dataJson(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error {
+func renderUpdate(w http.ResponseWriter, r *http.Request) {
+	ctx := appengine.NewContext(r)
+	logger := logging.NewRecordingLogger(ctx, false)
+	
+	var err error
+	defer recordInitUpdate(err, logger)
+	err = update(w, r, logger)
+	if err != nil {
+		ctx.Errorf("ERROR: %+v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func update(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
+	var err error
+	
 	ctx := appengine.NewContext(r)
 	
 	if r.Method != "POST" {
@@ -325,6 +293,7 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 	}
 	
 	// Fetch movie data.
+	// TODO This information should be fetched on demand (as location data is) or also fetched on initialization.
 	mi, err := sqldb.LoadMovieInfoJsons(db, logger)
 	if err != nil {
 		return err
@@ -365,19 +334,16 @@ func update(w http.ResponseWriter, r *http.Request, logger logging.Logger) error
 }
 
 func renderStatus(w http.ResponseWriter, r *http.Request) {
-	if err := status(w, r); err != nil {
-		ctx := appengine.NewContext(r)
+	ctx := appengine.NewContext(r)
+	logger := logging.NewRecordingLogger(ctx, false)
+	if err := status(w, r, logger); err != nil {
 		ctx.Errorf(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func status(w http.ResponseWriter, r *http.Request) error {
-	ctx := appengine.NewContext(r)
-	recordingLogger.Wrap(ctx)
-	defer recordingLogger.Unwrap()
-	
-	recordingLogger.Infof("Rendering status page")
+func status(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
+	logger.Infof("Rendering status page")
 	
 	sw := watch.NewStopWatch()
 	
@@ -447,6 +413,7 @@ func status(w http.ResponseWriter, r *http.Request) error {
 	
 	dt := sw.TotalElapsedTimeMillis()
 	
+	ctx := appengine.NewContext(r)
 	version := appengine.VersionID(ctx)
 	
 	args := struct {
@@ -466,8 +433,46 @@ func status(w http.ResponseWriter, r *http.Request) error {
 		InfoTime         int64
 		RecordedErr      error
 		RecordedLog      []string
+		Logs             []string
 		Version          string
-	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog, version}
+	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog, logger.Entries, version}
 	
 	return tpl.Render(w, tpl.Status, args)
+}
+
+func renderPing(w http.ResponseWriter, r *http.Request) {
+	if err := ping(w, r); err != nil {
+		ctx := appengine.NewContext(r)
+		ctx.Errorf(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func ping(w http.ResponseWriter, r *http.Request) error {
+	sw := watch.NewStopWatch()
+	//err := db.Ping()
+	row := db.QueryRow("SELECT 42")
+	
+	var _42 int
+	if err := row.Scan(&_42); err != nil {
+		return err
+	}
+	
+	if _42 != 42 {
+		return errors.New("Invalid response from DB")
+	}
+	
+	ctx := appengine.NewContext(r)
+	version := appengine.VersionID(ctx)
+	args := &struct {
+		Logs    []string
+		Clock   string
+		Time    int64
+		Version string
+	}{nil, sw.InitTime.String(), sw.TotalElapsedTimeMillis(), version}
+	
+	if err := tpl.Render(w, tpl.Ping, args); err != nil {
+		return err
+	}
+	return nil
 }

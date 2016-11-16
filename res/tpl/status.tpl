@@ -48,6 +48,8 @@
 </table>
 
 <h2>Init/update</h2>
+Note that this information only concerns the particular application instance that you happened to hit with this request.
+
 <h3>Error</h3>
 <pre>{{ .RecordedErr }}</pre>
 <h3>Log</h3>

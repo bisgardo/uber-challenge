@@ -14,15 +14,17 @@ func Init(db *sql.DB, filename string, logger logging.Logger) (bool, error) {
 	InitUpdateMutex.Lock()
 	defer InitUpdateMutex.Unlock()
 	
-	initialized, err := IsInitialized(db)
+	alreadyInitialized, err := IsInitialized(db)
 	if err != nil {
-		return false, err
+		return !alreadyInitialized, err
 	}
 	
-	if initialized {
+	if alreadyInitialized {
 		logger.Infof("Database is already initialized")
 		return false, nil
 	}
+	
+	// Database is uninitialized. Try and initialize it...
 	
 	logger.Infof("Initializing database from cached file...")
 	

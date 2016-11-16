@@ -85,12 +85,13 @@ be needed for the project to be production-ready.
     constraints, it cannot be done for all movies at once (on update) - even with concurrent requests. This fetching
     should be performed in such a way that redundant queries to the Geolocation API are minimized and uniqueness
     constraint violations in the database avoided. Also, negative lookups are not cached.
-*   Movie info data should expire such that at least ratings are updated once in a while.
+*   Movie info data should expire such that at least ratings are updated once in a while. Also, the data is currently
+    not loaded on initialization and thus requires an "update" action to be performed.
 
 ### Other ideas for future work
 
-*   Figure out why Cloud SQL is so slow (a simple table count takes more than 100 ms as seen on the status page) and try
-    using other storage strategies if it can't be improved.
+*   Figure out why Cloud SQL is so slow (simply pinging the database with a trivial query such as `SELECT 42` takes more
+    than 100 ms as can be seen on the "ping" page) and try using other storage strategies if it can't be improved.
 *   The quality of the data set linked above is quite bad. It could help a lot if users were able add the coordinates of
     a location (e.g. by giving an address), and possibly other pieces of data as well.
 *   Add pages for people (actors, writers, and directors) and list the movies that they participated in and the
