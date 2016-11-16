@@ -9,7 +9,7 @@
 	</p>
 </form>
 <ul>
-	{{ range .Movies }}
+	{{ range . }}
 		<li>
 			{{ $m := .Movie}}
 			<a href="/movie/{{.Id}}">{{ if $m.Title }}<b>{{ $m.Title }}</b>{{ else }}<i>[No title]</i>{{ end }}</a>

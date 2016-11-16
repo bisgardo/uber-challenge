@@ -2,10 +2,12 @@ package tpl
 
 import (
 	"src/config"
+	"src/logging"
 	"strings"
 	"html/template"
 	"net/http"
 	"reflect"
+	"appengine"
 )
 
 const extension = ".tpl"
@@ -31,9 +33,21 @@ func compile(name string, funcMap template.FuncMap) *template.Template {
 	return template.Must(template.New(tplName).Funcs(funcMap).ParseFiles("res/tpl/layout.tpl", filename))
 }
 
-func Render(w http.ResponseWriter, tpl *template.Template, args interface{}) error {
-	// TODO Wrap `args` in object with log and version such that controller methods don't need to remember that.
-	return tpl.ExecuteTemplate(w, "layout", args)
+type TemplateData struct {
+	Subtitle string
+	Version  string
+	Log      []string
+	Data     interface{}
+}
+
+func NewTemplateData(ctx appengine.Context, logger *logging.RecordingLogger, data interface{}) TemplateData {
+	version := appengine.VersionID(ctx)
+	log := logger.Entries
+	return TemplateData{Version: version, Log: log, Data: data}
+}
+
+func Render(w http.ResponseWriter, tpl *template.Template, data TemplateData) error {
+	return tpl.ExecuteTemplate(w, "layout", data)
 }
 
 var About = compile("about", template.FuncMap{})

@@ -2,7 +2,7 @@
 
 <html>
 {{ comment_begin }} BEGIN LOGS
-	{{ range .Logs }}
+	{{ range .Log }}
 		{{ . }}
 	{{ end }}
 END LOGS {{ comment_end }}
@@ -45,7 +45,7 @@ END LOGS {{ comment_end }}
 			</div>
 		</div>
 		
-		{{ template "content" . }}
+		{{ template "content" .Data }}
 		
 		<hr>
 		<small style="float:left">Version: {{ .Version }} &middot; <a href="/ping">Ping</a> &middot; <a href="/data">Data</a></small>

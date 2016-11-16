@@ -105,13 +105,8 @@ func render(renderer func(w http.ResponseWriter, r *http.Request, logger *loggin
 
 func front(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
 	ctx := appengine.NewContext(r)
-	version := appengine.VersionID(ctx)
-	args := &struct {
-		Logs    []string
-		Version string
-	}{logger.Entries, version}
-	
-	return tpl.Render(w, tpl.About, args)
+	templateData := tpl.NewTemplateData(ctx, logger, nil)
+	return tpl.Render(w, tpl.About, templateData)
 }
 
 func movie(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
@@ -195,14 +190,10 @@ func movie(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogg
 	info.Director = m.Director
 	info.Released = strconv.Itoa(m.ReleaseYear)
 	
-	version := appengine.VersionID(ctx)
 	args := &struct {
-		Logs    []string
-		Subtitle string
 		Movie    *types.Movie
 		Info     *MovieInfo
-		Version  string
-	}{logger.Entries, info.Title, &m, &info, version}
+	}{&m, &info}
 	
 	if infoJson, err := sqldb.LoadMovieInfoJson(db, m.Title, logger); infoJson != "" && err == nil {
 		// Only attempt to parse JSON if it was loaded successfully
@@ -211,7 +202,9 @@ func movie(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogg
 		}
 	}
 	
-	return tpl.Render(w, tpl.Movie, args)
+	templateData := tpl.NewTemplateData(ctx, logger, args)
+	templateData.Subtitle = info.Title
+	return tpl.Render(w, tpl.Movie, templateData)
 }
 
 func movies(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
@@ -223,16 +216,9 @@ func movies(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLog
 	}
 	
 	ctx := appengine.NewContext(r)
-	version := appengine.VersionID(ctx)
-	
-	args := &struct {
-		Logs       []string
-		Movies     []types.IdMoviePair
-		OutputLogs bool
-		Version    string
-	}{logger.Entries, ms, true, version}
-	
-	if err := tpl.Render(w, tpl.Movies, args); err != nil {
+	templateData := tpl.NewTemplateData(ctx, logger, ms)
+	templateData.Subtitle = "List"
+	if err := tpl.Render(w, tpl.Movies, templateData); err != nil {
 		return err
 	}
 	
@@ -413,9 +399,6 @@ func status(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLog
 	
 	dt := sw.TotalElapsedTimeMillis()
 	
-	ctx := appengine.NewContext(r)
-	version := appengine.VersionID(ctx)
-	
 	args := struct {
 		Clock            string
 		Time             int64
@@ -433,11 +416,12 @@ func status(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLog
 		InfoTime         int64
 		RecordedErr      error
 		RecordedLog      []string
-		Logs             []string
-		Version          string
-	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog, logger.Entries, version}
+	}{sw.InitTime.String(), dt, mc, mt, ac, at, lc, lt, rc, rt, cc, ct, ic, it, recordedError, recordedLog}
 	
-	return tpl.Render(w, tpl.Status, args)
+	ctx := appengine.NewContext(r)
+	templateData := tpl.NewTemplateData(ctx, logger, args)
+	templateData.Subtitle = "Status"
+	return tpl.Render(w, tpl.Status, templateData)
 }
 
 func renderPing(w http.ResponseWriter, r *http.Request) {
@@ -462,16 +446,16 @@ func ping(w http.ResponseWriter, r *http.Request) error {
 		return errors.New("Invalid response from DB")
 	}
 	
-	ctx := appengine.NewContext(r)
-	version := appengine.VersionID(ctx)
 	args := &struct {
-		Logs    []string
 		Clock   string
 		Time    int64
-		Version string
-	}{nil, sw.InitTime.String(), sw.TotalElapsedTimeMillis(), version}
+	}{sw.InitTime.String(), sw.TotalElapsedTimeMillis()}
 	
-	if err := tpl.Render(w, tpl.Ping, args); err != nil {
+	ctx := appengine.NewContext(r)
+	logger := logging.NewRecordingLogger(ctx, false)
+	templateData := tpl.NewTemplateData(ctx, logger, args)
+	templateData.Subtitle = "Ping"
+	if err := tpl.Render(w, tpl.Ping, templateData); err != nil {
 		return err
 	}
 	return nil
