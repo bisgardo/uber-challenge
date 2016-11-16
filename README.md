@@ -76,8 +76,8 @@ Due to the fact that many new things had to be learned and dealt with to make th
 the following features have been left unimplemented. While they are non-essential for a working prototype, they would
 be needed for the project to be production-ready.
 
-*   Testing: The whole system has been manually tested to work as intended, but should be covered by a test suite before
-    implementing new features. Also, types and functions should be properly documented.
+*   Testing: The whole system has been manually tested to work as intended, but should of course be covered by a proper
+    test suite before new features are implemented. Also, types and functions should be properly documented.
 *   There is currently nothing to prevent multiple app instances from updating the database simultaneously. While
     critical parts are done transactionally, weird inconsistencies have been observed. The task should be performed by a
     batch job and be limited in how often it can execute.
@@ -86,14 +86,11 @@ be needed for the project to be production-ready.
     should be performed in such a way that redundant queries to the Geolocation API are minimized and uniqueness
     constraint violations in the database avoided. Also, negative lookups are not cached.
 *   Movie info data should expire such that at least ratings are updated once in a while.
-*   The statements that insert data in the database in bulk are built using naive string concatenation and is
-    susceptible to injection attacks (although all data is currently coming from more or less trusted sources). This
-    should be replaced with "dynamic" prepared statements, or we should use a DB driver that supports bulk insertion.
 
 ### Other ideas for future work
 
-*   Figure out why Cloud SQL is so slow (a simple table count takes more than 100 ms) and try using other storage
-    strategies if it can't be improved.
+*   Figure out why Cloud SQL is so slow (a simple table count takes more than 100 ms as seen on the status page) and try
+    using other storage strategies if it can't be improved.
 *   The quality of the data set linked above is quite bad. It could help a lot if users were able add the coordinates of
     a location (e.g. by giving an address), and possibly other pieces of data as well.
 *   Add pages for people (actors, writers, and directors) and list the movies that they participated in and the
