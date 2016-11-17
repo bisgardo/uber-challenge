@@ -102,6 +102,12 @@ func render(renderer func(w http.ResponseWriter, r *http.Request, log *logging.R
 		}
 	}
 }
+func preventCaching(w http.ResponseWriter) {
+	// Prevent caching of pages. As App Engine auto-includes a "Date"-header, setting the "Expires"-header
+	// should usually be sufficient in these modern times (according to 'http://stackoverflow.com/a/2068407/883073').
+	// Also, it seems that App Engine picks it up and adds safer headers.
+	w.Header().Set("Expires", "0")
+}
 
 func front(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error {
 	ctx := appengine.NewContext(r)
@@ -110,6 +116,8 @@ func front(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger)
 }
 
 func movie(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error {
+	preventCaching(w);
+	
 	path := r.URL.Path
 	idx := strings.LastIndex(path, "/")
 	idStr := path[idx + 1:]
@@ -208,6 +216,8 @@ func movie(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger)
 }
 
 func movies(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error {
+	preventCaching(w);
+	
 	log.Infof("Rendering movie list page")
 	
 	movies, err := sqldb.LoadMovies(db, log)
@@ -228,6 +238,8 @@ func movies(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger
 // TODO Have one optimized endpoint with only data needed for autocomplete and one with *all* data.
 
 func renderDataJson(w http.ResponseWriter, r *http.Request) {
+	preventCaching(w);
+	
 	ctx := appengine.NewContext(r)
 	
 	movies, err := sqldb.LoadMovies(db, ctx)
@@ -329,6 +341,8 @@ func renderStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func status(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
+	preventCaching(w);
+	
 	logger.Infof("Rendering status page")
 	
 	sw := watch.NewStopWatch()
@@ -433,6 +447,8 @@ func renderPing(w http.ResponseWriter, r *http.Request) {
 }
 
 func ping(w http.ResponseWriter, r *http.Request) error {
+	preventCaching(w);
+	
 	sw := watch.NewStopWatch()
 	//err := db.Ping()
 	row := db.QueryRow("SELECT 42")
