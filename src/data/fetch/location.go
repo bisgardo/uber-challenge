@@ -16,18 +16,18 @@ import (
 	"src/data/types"
 )
 
-func FetchLocationCoordinates(mapsApiKey string, location string, ctx appengine.Context, logger logging.Logger) (types.Coordinates, error) {
-	u := fmt.Sprintf(
+func FetchLocationCoordinates(mapsApiKey string, locName string, ctx appengine.Context, logger logging.Logger) (types.Coordinates, error) {
+	uri := fmt.Sprintf(
 		"https://maps.googleapis.com/maps/api/geocode/json?address=%s,San+Fransisco,+CA&key=%s",
-		url.QueryEscape(location),
+		url.QueryEscape(locName),
 		mapsApiKey,
 	)
 	
 	sw := watch.NewStopWatch()
 	
-	logger.Infof("Fetching coordinates of location '%s' from URL '%s'", location, u)
+	logger.Infof("Fetching coordinates of location '%s' from URL '%s'", locName, uri)
 	client := urlfetch.Client(ctx)
-	resp, err := client.Get(u)
+	resp, err := client.Get(uri)
 	if err != nil {
 		return types.Coordinates{}, err
 	}
@@ -58,17 +58,17 @@ func FetchLocationCoordinates(mapsApiKey string, location string, ctx appengine.
 	result := res.Results[0]
 	if res.Status != "OK" || result.Formatted_Address == "California, USA" {
 		// Error or generic response. Look for nested address.
-		leftParIndex := strings.Index(location, "(")
-		rightParIndex := strings.Index(location, ")")
+		leftParIdx := strings.Index(locName, "(")
+		rightParIdx := strings.Index(locName, ")")
 		
-		if 0 <= leftParIndex && leftParIndex < rightParIndex {
-			subLocation := strings.TrimSpace(location[leftParIndex + 1 : rightParIndex])
+		if 0 <= leftParIdx && leftParIdx < rightParIdx {
+			subLocation := strings.TrimSpace(locName[leftParIdx + 1 : rightParIdx])
 			return FetchLocationCoordinates(mapsApiKey, subLocation, ctx, logger)
 		}
 		
-		commaIndex := strings.Index(location, ",")
-		if 0 <= commaIndex && commaIndex < len(location) {
-			subLocation := strings.TrimSpace(location[commaIndex + 1 : ])
+		commaIdx := strings.Index(locName, ",")
+		if 0 <= commaIdx && commaIdx < len(locName) {
+			subLocation := strings.TrimSpace(locName[commaIdx + 1 : ])
 			return FetchLocationCoordinates(mapsApiKey, subLocation, ctx, logger)
 		}
 		

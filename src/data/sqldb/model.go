@@ -5,12 +5,12 @@ import (
 	"database/sql"
 )
 
-func InitTables(tx *sql.Tx, logger logging.Logger) error {
+func InitTables(tx *sql.Tx, log logging.Logger) error {
 	// TODO Store writer and director in (renamed) actors table and add role to relation.
 	
 	var err error
 	
-	logger.Infof("Creating table 'movies' unless it already exists")
+	log.Infof("Creating table 'movies' unless it already exists")
 	_, err = tx.Exec(
 		`CREATE TABLE IF NOT EXISTS movies (
 			id                 INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -26,7 +26,7 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 		return err
 	}
 	
-	logger.Infof("Creating table 'locations' unless it already exists")
+	log.Infof("Creating table 'locations' unless it already exists")
 	_, err = tx.Exec(
 		`CREATE TABLE IF NOT EXISTS locations (
 			id       INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -41,7 +41,7 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 		return err
 	}
 	
-	logger.Infof("Creating table 'actors' unless it already exists")
+	log.Infof("Creating table 'actors' unless it already exists")
 	_, err = tx.Exec(
 		`CREATE TABLE IF NOT EXISTS actors (
 			id   INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -52,7 +52,7 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 		return err
 	}
 	
-	logger.Infof("Creating table 'movies_actors' unless it already exists")
+	log.Infof("Creating table 'movies_actors' unless it already exists")
 	_, err = tx.Exec(
 		`CREATE TABLE IF NOT EXISTS movies_actors (
 			movie_id INT UNSIGNED,
@@ -67,31 +67,31 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 		return err
 	}
 	
-	logger.Infof("Clearing table 'movies_actors'")
+	log.Infof("Clearing table 'movies_actors'")
 	_, err = tx.Exec("DELETE FROM movies_actors")
 	if err != nil {
 		return err
 	}
 	
-	logger.Infof("Clearing table 'actors'")
+	log.Infof("Clearing table 'actors'")
 	_, err = tx.Exec("DELETE FROM actors")
 	if err != nil {
 		return err
 	}
 	
-	logger.Infof("Clearing table 'locations'")
+	log.Infof("Clearing table 'locations'")
 	_, err = tx.Exec("DELETE FROM locations")
 	if err != nil {
 		return err
 	}
 	
-	logger.Infof("Clearing table 'movies'")
+	log.Infof("Clearing table 'movies'")
 	_, err = tx.Exec("DELETE FROM movies")
 	if err != nil {
 		return err
 	}
 	
-	logger.Infof("Creating table 'coordinates' unless it already exists")
+	log.Infof("Creating table 'coordinates' unless it already exists")
 	// As the table is intended to act as a cache that survives updates, `location_name` is not constrained to reference
 	// an actual location name.
 	_, err = tx.Exec(
@@ -105,7 +105,7 @@ func InitTables(tx *sql.Tx, logger logging.Logger) error {
 		return err
 	}
 	
-	logger.Infof("Creating table 'movie_info' unless it already exists")
+	log.Infof("Creating table 'movie_info' unless it already exists")
 	// As the table is intended to act as a cache that survives updates, `movie_title` is not constrained to reference
 	// an actual movie title.
 	_, err = tx.Exec(

@@ -29,12 +29,12 @@ var jsonFileName = config.JsonFileName()
 var mapsApiKey = config.MapsApiKey()
 
 func init() {
-	logger := logging.NewRecordingLogger(&logging.InitLogger{}, true)
+	log := logging.NewRecordingLogger(&logging.InitLogger{}, true)
 	
-	logger.Infof("Spinning up instance with ID '%s'", appengine.InstanceID())
+	log.Infof("Spinning up instance with ID '%s'", appengine.InstanceID())
 	
-	err := openInit(logger)
-	recordInitUpdate(err, logger)
+	err := openInit(log)
+	recordInitUpdate(err, log)
 	if err != nil {
 		panic(err)
 	}
@@ -51,25 +51,25 @@ func init() {
 	// TODO Add pages for actor, ...
 }
 
-func openInit(logger *logging.RecordingLogger) error {
-	if err := Open(logger); err != nil {
+func openInit(log *logging.RecordingLogger) error {
+	if err := openDb(log); err != nil {
 		return err
 	}
-	if _, err := data.Init(db, jsonFileName, logger); err != nil {
+	if _, err := data.Init(db, jsonFileName, log); err != nil {
 		return err
 	}
 	return nil
 }
 
-func recordInitUpdate(err error, recordingLogger *logging.RecordingLogger) {
+func recordInitUpdate(err error, log *logging.RecordingLogger) {
 	recordedError = err
-	entries := recordingLogger.Entries
+	entries := log.Entries
 	entriesCopy := make([]string, len(entries))
 	copy(entriesCopy, entries)
 	recordedLog = entriesCopy
 }
 
-func Open(logger logging.Logger) error {
+func openDb(logger logging.Logger) error {
 	var err error
 	if appengine.IsDevAppServer() {
 		logger.Infof("Running in development mode")
@@ -81,19 +81,19 @@ func Open(logger logging.Logger) error {
 	return err
 }
 
-func render(renderer func(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error) func(w http.ResponseWriter, r *http.Request) {
+func render(renderer func(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := appengine.NewContext(r)
-		logger := logging.NewRecordingLogger(ctx, false)
+		log := logging.NewRecordingLogger(ctx, false)
 		
 		// Check if database is initialized and load from file if it isn't.
-		initialized, err := data.Init(db, jsonFileName, logger)
+		initialized, err := data.Init(db, jsonFileName, log)
 		if initialized {
-			recordInitUpdate(err, logger)
+			recordInitUpdate(err, log)
 		}
 		
 		if err == nil {
-			err = renderer(w, r, logger)
+			err = renderer(w, r, log)
 		}
 		
 		if err != nil {
@@ -103,62 +103,62 @@ func render(renderer func(w http.ResponseWriter, r *http.Request, logger *loggin
 	}
 }
 
-func front(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
+func front(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error {
 	ctx := appengine.NewContext(r)
-	templateData := tpl.NewTemplateData(ctx, logger, nil)
+	templateData := tpl.NewTemplateData(ctx, log, nil)
 	return tpl.Render(w, tpl.About, templateData)
 }
 
-func movie(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
+func movie(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error {
 	path := r.URL.Path
-	i := strings.LastIndex(path, "/")
-	id := path[i + 1:]
+	idx := strings.LastIndex(path, "/")
+	idStr := path[idx + 1:]
 	
-	mId, err := strconv.Atoi(id)
+	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Invalid movie ID '%s'", id))
+		return errors.New(fmt.Sprintf("Invalid movie ID '%s'", idStr))
 	}
 	
-	logger.Infof("Rendering movie with ID %d", mId)
+	log.Infof("Rendering movie with ID %d", id)
 	
-	m, err := sqldb.LoadMovie(db, int64(mId), logger)
+	movie, err := sqldb.LoadMovie(db, int64(id), log)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("Movie with ID %d not found", mId), http.StatusNotFound)
+		http.Error(w, fmt.Sprintf("Movie with ID %d not found", id), http.StatusNotFound)
 		return nil
 	}
 	
-	logger.Infof("Loading coordinates")
-	coords, err := sqldb.LoadCoordinates(db, m.Locations, logger)
+	log.Infof("Loading coordinates")
+	locNameCoordsMap, err := sqldb.LoadCoordinates(db, movie.Locations, log)
 	
 	missingCoords := make(map[string]*types.Coordinates)
-	for _, location := range m.Locations {
-		name := location.Name
-		if _, exists := coords[name]; !exists {
-			missingCoords[name] = nil
+	for _, loc := range movie.Locations {
+		locName := loc.Name
+		if _, exists := locNameCoordsMap[locName]; !exists {
+			missingCoords[locName] = nil
 		}
 	}
 	
 	// Load missing coordinates.
 	ctx := appengine.NewContext(r)
 	delayFunc := func (count int) int { return 50 * count }
-	fetch.FetchMissingLocationNames(missingCoords, delayFunc, mapsApiKey, ctx, logger)
+	fetch.FetchMissingLocationNames(missingCoords, delayFunc, mapsApiKey, ctx, log)
 	
 	// Store missing coordinates.
-	if err := sqldb.StoreCoordinates(db, missingCoords, logger); err != nil {
+	if err := sqldb.StoreCoordinates(db, missingCoords, log); err != nil {
 		return err
 	}
 	
 	// Add missing coordinates to `coords`.
-	for n, c := range missingCoords {
-		if c != nil {
-			coords[n] = *c
+	for locName, locCoords := range missingCoords {
+		if locCoords != nil {
+			locNameCoordsMap[locName] = *locCoords
 		}
 	}
 	
 	// Set coordinates on locations.
-	for i := range m.Locations {
-		location := &m.Locations[i]
-		location.Coordinates = coords[location.Name]
+	for i := range movie.Locations {
+		loc := &movie.Locations[i]
+		loc.Coordinates = locNameCoordsMap[loc.Name]
 	}
 	
 	type MovieInfo struct {
@@ -184,39 +184,39 @@ func movie(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogg
 	
 	var info MovieInfo
 	
-	info.Title = m.Title
-	info.Actors = strings.Join(m.Actors, ", ")
-	info.Writer = m.Writer
-	info.Director = m.Director
-	info.Released = strconv.Itoa(m.ReleaseYear)
+	info.Title = movie.Title
+	info.Actors = strings.Join(movie.Actors, ", ")
+	info.Writer = movie.Writer
+	info.Director = movie.Director
+	info.Released = strconv.Itoa(movie.ReleaseYear)
 	
 	args := &struct {
 		Movie    *types.Movie
 		Info     *MovieInfo
-	}{&m, &info}
+	}{&movie, &info}
 	
-	if infoJson, err := sqldb.LoadMovieInfoJson(db, m.Title, logger); infoJson != "" && err == nil {
+	if infoJson, err := sqldb.LoadMovieInfoJson(db, movie.Title, log); infoJson != "" && err == nil {
 		// Only attempt to parse JSON if it was loaded successfully
 		if err := json.Unmarshal([]byte(infoJson), &info); err != nil {
-			logger.Errorf(err.Error())
+			log.Errorf(err.Error())
 		}
 	}
 	
-	templateData := tpl.NewTemplateData(ctx, logger, args)
+	templateData := tpl.NewTemplateData(ctx, log, args)
 	templateData.Subtitle = info.Title
 	return tpl.Render(w, tpl.Movie, templateData)
 }
 
-func movies(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
-	logger.Infof("Rendering movie list page")
+func movies(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error {
+	log.Infof("Rendering movie list page")
 	
-	ms, err := sqldb.LoadMovies(db, logger)
+	movies, err := sqldb.LoadMovies(db, log)
 	if err != nil {
 		return err
 	}
 	
 	ctx := appengine.NewContext(r)
-	templateData := tpl.NewTemplateData(ctx, logger, ms)
+	templateData := tpl.NewTemplateData(ctx, log, movies)
 	templateData.Subtitle = "List"
 	if err := tpl.Render(w, tpl.Movies, templateData); err != nil {
 		return err
@@ -225,35 +225,35 @@ func movies(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLog
 	return nil
 }
 
-// TODO Have one endpoint with only data needed for autocomplete and one with *all* data.
+// TODO Have one optimized endpoint with only data needed for autocomplete and one with *all* data.
 
 func renderDataJson(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
 	
-	ms, err := sqldb.LoadMovies(db, ctx)
+	movies, err := sqldb.LoadMovies(db, ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 	
-	if err := json.NewEncoder(w).Encode(ms); err != nil {
+	if err := json.NewEncoder(w).Encode(movies); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
 func renderUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
-	logger := logging.NewRecordingLogger(ctx, false)
+	log := logging.NewRecordingLogger(ctx, false)
 	
 	var err error
-	defer recordInitUpdate(err, logger)
-	err = update(w, r, logger)
+	defer recordInitUpdate(err, log)
+	err = update(w, r, log)
 	if err != nil {
 		ctx.Errorf("ERROR: %+v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
-func update(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLogger) error {
+func update(w http.ResponseWriter, r *http.Request, log *logging.RecordingLogger) error {
 	var err error
 	
 	ctx := appengine.NewContext(r)
@@ -270,30 +270,30 @@ func update(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLog
 	data.InitUpdateMutex.Lock()
 	defer data.InitUpdateMutex.Unlock()
 	
-	ms, err := fetch.FetchFromUrl(config.ServiceUrl(), ctx, logger)
+	movies, err := fetch.FetchFromUrl(config.ServiceUrl(), ctx, log)
 	if err != nil {
 		return err
 	}
-	if err := sqldb.InitTablesAndStoreMovies(db, ms, logger); err != nil {
+	if err := sqldb.InitTablesAndStoreMovies(db, movies, log); err != nil {
 		return err
 	}
 	
 	// Fetch movie data.
 	// TODO This information should be fetched on demand (as location data is) or also fetched on initialization.
-	mi, err := sqldb.LoadMovieInfoJsons(db, logger)
+	movieTitleInfoMap, err := sqldb.LoadMovieInfoJsons(db, log)
 	if err != nil {
 		return err
 	}
 	
 	movieTitleInfo := make(map[string]string)
-	for _, m := range ms {
-		t := m.Title
-		if _, exists := mi[t]; exists {
+	for _, movie := range movies {
+		movieTitle := movie.Title
+		if _, exists := movieTitleInfoMap[movieTitle]; exists {
 			// Info already in DB.
 			continue
 		}
 		
-		infoJson, err := fetch.FetchMovieInfo(t, ctx, logger)
+		infoJson, err := fetch.FetchMovieInfo(movieTitle, ctx, log)
 		if err != nil {
 			return err
 		}
@@ -307,11 +307,11 @@ func update(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLog
 			infoJson = "";
 		}
 		
-		movieTitleInfo[t] = infoJson
+		movieTitleInfo[movieTitle] = infoJson
 	}
 	
 	// Store movie data.
-	if err := sqldb.StoreMovieInfo(db, movieTitleInfo, logger); err != nil {
+	if err := sqldb.StoreMovieInfo(db, movieTitleInfo, log); err != nil {
 		return err
 	}
 	
@@ -321,8 +321,8 @@ func update(w http.ResponseWriter, r *http.Request, logger *logging.RecordingLog
 
 func renderStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := appengine.NewContext(r)
-	logger := logging.NewRecordingLogger(ctx, false)
-	if err := status(w, r, logger); err != nil {
+	log := logging.NewRecordingLogger(ctx, false)
+	if err := status(w, r, log); err != nil {
 		ctx.Errorf(err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -452,8 +452,8 @@ func ping(w http.ResponseWriter, r *http.Request) error {
 	}{sw.InitTime.String(), sw.TotalElapsedTimeMillis()}
 	
 	ctx := appengine.NewContext(r)
-	logger := logging.NewRecordingLogger(ctx, false)
-	templateData := tpl.NewTemplateData(ctx, logger, args)
+	log := logging.NewRecordingLogger(ctx, false)
+	templateData := tpl.NewTemplateData(ctx, log, args)
 	templateData.Subtitle = "Ping"
 	if err := tpl.Render(w, tpl.Ping, templateData); err != nil {
 		return err

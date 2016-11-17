@@ -2,7 +2,7 @@ runtime: go
 api_version: go1
 
 application: uber-challenge-148819
-version: alpha-002
+version: 001
 
 handlers:
 - url: /favicon\.ico

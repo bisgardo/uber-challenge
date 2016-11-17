@@ -8,86 +8,84 @@ import (
 	"database/sql"
 )
 
-func LoadMovie(db *sql.DB, id int64, logger logging.Logger) (types.Movie, error) {
-	var m types.Movie
+func LoadMovie(db *sql.DB, id int64, log logging.Logger) (types.Movie, error) {
+	var movie types.Movie
 	err := transaction(db, func (tx *sql.Tx) error {
-		row := tx.QueryRow("SELECT * FROM movies WHERE id = ?", id)
+		row := tx.QueryRow("SELECT title, writer, director, distributor, production_company, release_year FROM movies WHERE id = ?", id)
 		
-		var dummy int
 		err := row.Scan(
-			&dummy,
-			&m.Title,
-			&m.Writer,
-			&m.Director,
-			&m.Distributor,
-			&m.ProductionCompany,
-			&m.ReleaseYear,
+			&movie.Title,
+			&movie.Writer,
+			&movie.Director,
+			&movie.Distributor,
+			&movie.ProductionCompany,
+			&movie.ReleaseYear,
 		)
 		if err != nil {
 			return err
 		}
 		
-		if err := LoadLocations(tx, id, &m.Locations, logger); err != nil {
+		if err := LoadLocations(tx, id, &movie.Locations, log); err != nil {
 			return err
 		}
 		
-		if err := LoadActors(tx, id, &m.Actors, logger); err != nil {
+		if err := LoadActors(tx, id, &movie.Actors, log); err != nil {
 			return err
 		}
 		
 		return nil
 	})
-	return m, err
+	return movie, err
 }
 
-func LoadLocations(tx *sql.Tx, mId int64, ls *[]types.Location, logger logging.Logger) error {
-	logger.Debugf("Querying locations for movie %d", mId)
+func LoadLocations(tx *sql.Tx, id int64, locs *[]types.Location, log logging.Logger) error {
+	log.Debugf("Querying locations for movie %d", id)
 	
-	rows, err := tx.Query("SELECT name, fun_fact FROM locations AS l WHERE l.movie_id = ?", mId)
+	rows, err := tx.Query("SELECT name, fun_fact FROM locations AS l WHERE l.movie_id = ?", id)
 	if err != nil {
 		return err
 	}
 	
 	return forEachRow(rows, func (rows *sql.Rows) error {
-		var l types.Location
-		err := rows.Scan(&l.Name, &l.FunFact)
+		var loc types.Location
+		err := rows.Scan(&loc.Name, &loc.FunFact)
 		if err != nil {
 			return err
 		}
 		
-		*ls = append(*ls, l)
+		*locs = append(*locs, loc)
 		return nil
 	})
 }
 
-func LoadActors(tx *sql.Tx, mId int64, as *[]string, logger logging.Logger) error {
-	logger.Debugf("Querying actors for movie %d", mId)
+func LoadActors(tx *sql.Tx, movieId int64, actors *[]string, log logging.Logger) error {
+	log.Debugf("Querying actors for movie %d", movieId)
 	
 	rows, err := tx.Query(
 		"SELECT a.name FROM actors AS a, movies_actors AS r WHERE a.id = r.actor_id AND r.movie_id = ?",
-		mId,
+		movieId,
 	)
 	if err != nil {
 		return err
 	}
 	
 	return forEachRow(rows, func (rows *sql.Rows) error {
-		var a string
-		err := rows.Scan(&a)
+		var actorName string
+		err := rows.Scan(&actorName)
 		if err != nil {
 			return err
 		}
 		
-		*as = append(*as, a)
+		*actors = append(*actors, actorName)
 		return nil
 	})
 }
 
-func LoadMovies(db *sql.DB, logger logging.Logger) ([]types.IdMoviePair, error) {
-	var ms []types.IdMoviePair
+func LoadMovies(db *sql.DB, log logging.Logger) ([]types.IdMoviePair, error) {
+	var movies []types.IdMoviePair
 	
 	err := transaction(db, func (tx *sql.Tx) error {
-		logger.Debugf("Querying movies")
+		log.Debugf("Querying movies")
 		
 		// Loading all movies.
 		rows, err := tx.Query("SELECT id, title, writer, director, distributor, production_company, release_year FROM movies")
@@ -97,14 +95,23 @@ func LoadMovies(db *sql.DB, logger logging.Logger) ([]types.IdMoviePair, error) 
 		
 		idMovieMap := make(map[int64]*types.Movie)
 		err = forEachRow(rows, func (rows *sql.Rows) error {
-			var mId int64
-			var m types.Movie
+			var id int64
+			var movie types.Movie
 			
-			if err := rows.Scan(&mId, &m.Title, &m.Writer, &m.Director, &m.Distributor, &m.ProductionCompany, &m.ReleaseYear); err != nil {
+			err := rows.Scan(
+				&id,
+				&movie.Title,
+				&movie.Writer,
+				&movie.Director,
+				&movie.Distributor,
+				&movie.ProductionCompany,
+				&movie.ReleaseYear,
+			);
+			if err != nil {
 				return err
 			}
 			
-			idMovieMap[mId] = &m
+			idMovieMap[id] = &movie
 			return nil
 		})
 		if err != nil {
@@ -112,21 +119,19 @@ func LoadMovies(db *sql.DB, logger logging.Logger) ([]types.IdMoviePair, error) 
 		}
 		
 		// Load all locations.
-		if err := LoadAllLocations(tx, idMovieMap, logger); err != nil {
+		if err := LoadAllLocations(tx, idMovieMap, log); err != nil {
 			return err
 		}
 		
 		// Load all actors.
-		if err := LoadAllActors(tx, idMovieMap, logger); err != nil {
+		if err := LoadAllActors(tx, idMovieMap, log); err != nil {
 			return err
 		}
 		
-		ms = make([]types.IdMoviePair, 0, len(idMovieMap))
+		movies = make([]types.IdMoviePair, 0, len(idMovieMap))
 		for mId, m := range idMovieMap {
-			ms = append(ms, types.IdMoviePair{Id: mId, Movie: *m})
+			movies = append(movies, types.IdMoviePair{Id: mId, Movie: *m})
 		}
-		
-		// TODO Load actors...
 		
 		return nil
 	})
@@ -134,12 +139,12 @@ func LoadMovies(db *sql.DB, logger logging.Logger) ([]types.IdMoviePair, error) 
 		return nil, err
 	}
 	
-	sort.Sort(types.ByTitle(ms))
-	return ms, nil
+	sort.Sort(types.ByTitle(movies))
+	return movies, nil
 }
 
-func LoadAllLocations(tx *sql.Tx, idMovieMap map[int64]*types.Movie, logger logging.Logger) error {
-	logger.Debugf("Querying all locations")
+func LoadAllLocations(tx *sql.Tx, idMovieMap map[int64]*types.Movie, log logging.Logger) error {
+	log.Debugf("Querying all locations")
 	
 	rows, err := tx.Query("SELECT movie_id, name, fun_fact FROM locations")
 	if err != nil {
@@ -147,24 +152,24 @@ func LoadAllLocations(tx *sql.Tx, idMovieMap map[int64]*types.Movie, logger logg
 	}
 	
 	return forEachRow(rows, func (rows *sql.Rows) error {
-		var mId int64
-		var l types.Location
-		err := rows.Scan(&mId, &l.Name, &l.FunFact)
+		var id int64
+		var loc types.Location
+		err := rows.Scan(&id, &loc.Name, &loc.FunFact)
 		if err != nil {
 			return err
 		}
 		
-		m, exists := idMovieMap[mId]
+		movie, exists := idMovieMap[id]
 		if !exists {
 			panic("Unexpected location ID...")
 		}
-		m.Locations = append(m.Locations, l)
+		movie.Locations = append(movie.Locations, loc)
 		return nil
 	})
 }
 
-func LoadAllActors(tx *sql.Tx, idMovieMap map[int64]*types.Movie, logger logging.Logger) error {
-	logger.Debugf("Querying all actors")
+func LoadAllActors(tx *sql.Tx, idMovieMap map[int64]*types.Movie, log logging.Logger) error {
+	log.Debugf("Querying all actors")
 	
 	var rows *sql.Rows
 	var err error
@@ -176,12 +181,12 @@ func LoadAllActors(tx *sql.Tx, idMovieMap map[int64]*types.Movie, logger logging
 	idActorMap := make(map[int64]string)
 	err = forEachRow(rows, func (rows *sql.Rows) error {
 		var id int64
-		var a string
-		if err := rows.Scan(&id, &a); err != nil {
+		var actorName string
+		if err := rows.Scan(&id, &actorName); err != nil {
 			return err
 		}
 		
-		idActorMap[id] = a
+		idActorMap[id] = actorName
 		return nil
 	})
 	if err != nil {
@@ -194,23 +199,23 @@ func LoadAllActors(tx *sql.Tx, idMovieMap map[int64]*types.Movie, logger logging
 	}
 	
 	err = forEachRow(rows, func (rows *sql.Rows) error {
-		var mId int64
-		var aId int64
-		if err := rows.Scan(&mId, &aId); err != nil {
+		var movieId int64
+		var actorId int64
+		if err := rows.Scan(&movieId, &actorId); err != nil {
 			return err
 		}
 		
-		m, exists := idMovieMap[mId]
+		movie, exists := idMovieMap[movieId]
 		if !exists {
 			panic("Unexpected movie ID...")
 		}
 		
-		a, exists := idActorMap[aId]
+		actorName, exists := idActorMap[actorId]
 		if !exists {
 			panic("Unexpected actor ID...")
 		}
 		
-		m.Actors = append(m.Actors, a)
+		movie.Actors = append(movie.Actors, actorName)
 		return nil
 	})
 	if err != nil {
@@ -220,7 +225,7 @@ func LoadAllActors(tx *sql.Tx, idMovieMap map[int64]*types.Movie, logger logging
 	return nil
 }
 
-func LoadMovieInfoJson(db *sql.DB, title string, logger logging.Logger) (string, error) {
+func LoadMovieInfoJson(db *sql.DB, title string, log logging.Logger) (string, error) {
 	sw := watch.NewStopWatch()
 	
 	var info string
@@ -230,13 +235,13 @@ func LoadMovieInfoJson(db *sql.DB, title string, logger logging.Logger) (string,
 	})
 	
 	if err != nil {
-		logger.Infof("Loaded info for movie '%s' in %d ms", title, sw.TotalElapsedTimeMillis())
+		log.Infof("Loaded info for movie '%s' in %d ms", title, sw.TotalElapsedTimeMillis())
 	}
 	
 	return info, err
 }
 
-func LoadMovieInfoJsons(db *sql.DB, logger logging.Logger) (map[string]string, error) {
+func LoadMovieInfoJsons(db *sql.DB, log logging.Logger) (map[string]string, error) {
 	// TODO Parallelize (if the API allows it) and consider using memcached (with expiration) instead of SQL.
 	
 	sw := watch.NewStopWatch()
@@ -248,63 +253,63 @@ func LoadMovieInfoJsons(db *sql.DB, logger logging.Logger) (map[string]string, e
 		}
 		
 		return forEachRow(rows, func (rows *sql.Rows) error {
-			var t string
-			var i string
-			if err := rows.Scan(&t, &i); err != nil {
+			var movieTitle string
+			var infoJson string
+			if err := rows.Scan(&movieTitle, &infoJson); err != nil {
 				return err
 			}
-			movieInfo[t] = i
+			movieInfo[movieTitle] = infoJson
 			return nil
 		})
 	})
 	
 	if err == nil {
-		logger.Infof("Fetched info for %d movies in %d ms", len(movieInfo), sw.TotalElapsedTimeMillis())
+		log.Infof("Fetched info for %d movies in %d ms", len(movieInfo), sw.TotalElapsedTimeMillis())
 	}
 	
 	return movieInfo, err
 }
 
-func LoadCoordinates(db *sql.DB, locations []types.Location, logger logging.Logger) (map[string]types.Coordinates, error) {
+func LoadCoordinates(db *sql.DB, locs []types.Location, log logging.Logger) (map[string]types.Coordinates, error) {
 	sw := watch.NewStopWatch()
 	
-	names := make([]interface{}, 0, len(locations))
-	for _, l := range locations {
-		name := l.Name
-		names = append(names, name)
+	locNames := make([]interface{}, 0, len(locs))
+	for _, loc := range locs {
+		locName := loc.Name
+		locNames = append(locNames, locName)
 	}
 	
-	res := make(map[string]types.Coordinates)
+	locCoords := make(map[string]types.Coordinates)
 	
 	err := transaction(db, func (tx *sql.Tx) error {
 		// Construct string with format "(?, ?, ..., ?)".
-		prpStmtStr := fancyRepeat("(", "?", len(locations), ", ", ")")
+		prpStmtStr := fancyRepeat("(", "?", len(locs), ", ", ")")
 		
 		stmt := "SELECT location_name, lat, lng FROM coordinates WHERE location_name IN " + prpStmtStr
-		logger.Infof("Executing query '%s'", stmt)
+		log.Infof("Executing query '%s'", stmt)
 		
-		rows, err := tx.Query(stmt, names...)
+		rows, err := tx.Query(stmt, locNames...)
 		if err != nil {
 			return err
 		}
 		
 		return forEachRow(rows, func (rows *sql.Rows) error {
-			var n string
+			var locName string
 			var lat float32
 			var lng float32
-			err := rows.Scan(&n, &lat, &lng)
+			err := rows.Scan(&locName, &lat, &lng)
 			if err != nil {
 				return err
 			}
 			
-			res[n] = types.Coordinates{Lat: lat, Lng: lng}
+			locCoords[locName] = types.Coordinates{Lat: lat, Lng: lng}
 			return nil
 		})
 	})
 	
 	if err == nil {
-		logger.Infof("Fetched %d coordinated locations in %d ms", len(res), sw.TotalElapsedTimeMillis())
+		log.Infof("Fetched %d coordinated locations in %d ms", len(locCoords), sw.TotalElapsedTimeMillis())
 	}
 	
-	return res, err
+	return locCoords, err
 }

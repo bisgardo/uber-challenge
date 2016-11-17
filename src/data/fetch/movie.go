@@ -26,40 +26,40 @@ type entry struct {
 	Writer             string
 }
 
-func FetchFromUrl(url string, ctx appengine.Context, logger logging.Logger) ([]types.Movie, error) {
-	logger.Infof("Fetching from URL '%s'", url)
+func FetchFromUrl(url string, ctx appengine.Context, log logging.Logger) ([]types.Movie, error) {
+	log.Infof("Fetching from URL '%s'", url)
 	bytes, err := fetchBytes(url, ctx)
 	if err != nil {
 		return nil, err
 	}
-	logger.Infof("Fetched %d bytes", len(bytes))
-	es, err := fetchEntries(bytes)
+	log.Infof("Fetched %d bytes", len(bytes))
+	entries, err := fetchEntries(bytes)
 	if err != nil {
 		return nil, err
 	}
-	logger.Infof("Resolved %d entries", len(es))
-	ms := entriesToMovies(es)
-	logger.Infof("Resolved %d movies", len(ms))
-	return ms, nil
+	log.Infof("Resolved %d entries", len(entries))
+	movies := entriesToMovies(entries)
+	log.Infof("Resolved %d movies", len(movies))
+	return movies, nil
 }
 
-func FetchFromFile(filename string) ([]types.Movie, error) {
-	log.Println("Fetching from file: " + filename)
-	bytes, err := ioutil.ReadFile(filename)
+func FetchFromFile(fileName string) ([]types.Movie, error) {
+	log.Println("Fetching from file: " + fileName)
+	bytes, err := ioutil.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}
 	
-	es, err := fetchEntries(bytes)
+	entries, err := fetchEntries(bytes)
 	if err != nil {
 		return nil, err
 	}
 	
-	return entriesToMovies(es), nil
+	return entriesToMovies(entries), nil
 }
 
-func fetchEntries(bytes []byte) (es []entry, err error) {
-	err = json.Unmarshal(bytes, &es)
+func fetchEntries(bytes []byte) (entries []entry, err error) {
+	err = json.Unmarshal(bytes, &entries)
 	return
 }
 
@@ -74,77 +74,77 @@ func fetchBytes(url string, ctx appengine.Context) ([]byte, error) {
 	return ioutil.ReadAll(resp.Body)
 }
 
-func entriesToMovies(es []entry) []types.Movie {
+func entriesToMovies(entries []entry) []types.Movie {
 	// Read entries into map indexed by the movie title.
-	m := make(map[string]*types.Movie)
-	for _, e := range es {
+	titleMovieMap := make(map[string]*types.Movie)
+	for _, entry := range entries {
 		// Parse location data and skip entry if it's empty.
-		l := entryToLocation(e)
-		if l.Name == "" {
+		loc := entryToLocation(entry)
+		if loc.Name == "" {
 			continue
 		}
 		
 		// Allocate new movie entry if it doesn't exist.
-		title := e.Title
-		mov, exists := m[title]
+		title := entry.Title
+		movie, exists := titleMovieMap[title]
 		if !exists {
-			tmp := entryToMovie(e)
-			mov = &tmp
-			m[title] = mov;
+			m := entryToMovie(entry)
+			movie = &m
+			titleMovieMap[title] = movie;
 		}
 		
 		// Add location to entry.
-		mov.Locations = append(mov.Locations, l)
+		movie.Locations = append(movie.Locations, loc)
 	}
 	
 	// Extract map values to slice...
-	ms := make([]types.Movie, 0, len(m))
-	for _, mov := range m {
-		ms = append(ms, *mov)
+	movies := make([]types.Movie, 0, len(titleMovieMap))
+	for _, movie := range titleMovieMap {
+		movies = append(movies, *movie)
 	}
 	
-	return ms
+	return movies
 }
 
-func entryToMovie(e entry) (m types.Movie) {
+func entryToMovie(entry entry) (movie types.Movie) {
 	// "Location"/"Fun fact" is added in `entryToLocation` below.
-	m.Title = cleaned(e.Title)
+	movie.Title = cleaned(entry.Title)
 	
-	cleanedActor1 := cleaned(e.Actor_1)
-	cleanedActor2 := cleaned(e.Actor_2)
-	cleanedActor3 := cleaned(e.Actor_3)
+	cleanedActor1 := cleaned(entry.Actor_1)
+	cleanedActor2 := cleaned(entry.Actor_2)
+	cleanedActor3 := cleaned(entry.Actor_3)
 	
 	if cleanedActor1 != "" {
-		m.Actors = append(m.Actors, e.Actor_1)
+		movie.Actors = append(movie.Actors, entry.Actor_1)
 	}
 	if cleanedActor2 != "" {
-		m.Actors = append(m.Actors, e.Actor_2)
+		movie.Actors = append(movie.Actors, entry.Actor_2)
 	}
 	if cleanedActor3 != "" {
-		m.Actors = append(m.Actors, e.Actor_3)
+		movie.Actors = append(movie.Actors, entry.Actor_3)
 	}
 	
-	m.Director = cleaned(e.Director)
-	m.ProductionCompany = cleaned(e.Production_company)
+	movie.Director = cleaned(entry.Director)
+	movie.ProductionCompany = cleaned(entry.Production_company)
 	
-	cleanedReleaseYear := cleaned(e.Release_year)
+	cleanedReleaseYear := cleaned(entry.Release_year)
 	if cleanedReleaseYear != "" {
-		m.ReleaseYear, _ = strconv.Atoi(cleanedReleaseYear)
+		movie.ReleaseYear, _ = strconv.Atoi(cleanedReleaseYear)
 	}
 	
-	m.Writer = cleaned(e.Writer)
+	movie.Writer = cleaned(entry.Writer)
 	
 	return
 }
 
-func entryToLocation(e entry) (l types.Location) {
-	l.Name = cleaned(e.Locations)
-	l.FunFact = cleaned(e.Fun_facts)
+func entryToLocation(entry entry) (loc types.Location) {
+	loc.Name = cleaned(entry.Locations)
+	loc.FunFact = cleaned(entry.Fun_facts)
 	return
 }
 
-func cleaned(s string) string {
-	ts := strings.TrimSpace(s)
+func cleaned(str string) string {
+	ts := strings.TrimSpace(str)
 	if ts == "N/A" {
 		return ""
 	}

@@ -13,7 +13,8 @@
 <p>
 	To view the filming locations of some movie, browse or search the drop-down in the upper right corner. An
 	alternative is to find it on the <a href="/movie">all movies</a> page, which also contains a button for updating the
-	database.
+	database with fresh data from an
+	<a href="https://data.sfgov.org/Arts-Culture-and-Recreation-/Film-Locations-in-San-Francisco/yitu-d5am">external service</a>.
 </p>
 <p>
 	Movie pages have two tabs: one (default) for listing the filming locations and displaying them on a map. The map

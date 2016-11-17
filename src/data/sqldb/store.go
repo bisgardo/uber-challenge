@@ -7,200 +7,205 @@ import (
 	"database/sql"
 )
 
-// TODO Turn bulk insertion stuff into nice utility (that is safe regarding injection and missing data) and replace current solutions with it...
-
-func InitTablesAndStoreMovies(db *sql.DB, ms []types.Movie, logger logging.Logger) error {
+func InitTablesAndStoreMovies(db *sql.DB, movies []types.Movie, log logging.Logger) error {
 	return transaction(db, func (tx *sql.Tx) error {
-		if err := InitTables(tx, logger); err != nil {
+		if err := InitTables(tx, log); err != nil {
 			return err
 		}
-		if err := StoreMovies(tx, ms, logger); err != nil {
+		if err := StoreMovies(tx, movies, log); err != nil {
 			return err
 		}
 		return nil
 	})
 }
 
-func StoreMovies(tx *sql.Tx, ms []types.Movie, logger logging.Logger) error {
-	if len(ms) == 0 {
+func StoreMovies(tx *sql.Tx, movies []types.Movie, log logging.Logger) error {
+	if len(movies) == 0 {
 		return nil
 	}
 	
-	logger.Infof("Inserting %d movies into database", len(ms))
+	log.Infof("Inserting %d movies into database", len(movies))
 	
 	sw := watch.NewStopWatch()
 	
 	// Batch insert movies.
-	movieBI := NewBulkInserter(7)
-	for _, m := range ms {
-		movieBI.Add(nil, m.Title, m.Writer, m.Director, m.Distributor, m.ProductionCompany, m.ReleaseYear)
+	movieInserter := NewBulkInserter(7)
+	for _, movie := range movies {
+		movieInserter.Add(nil, movie.Title, movie.Writer, movie.Director, movie.Distributor, movie.ProductionCompany, movie.ReleaseYear)
 	}
 	
-	if _, err := movieBI.Exec(tx, "movies", nil); err != nil {
+	if _, err := movieInserter.Exec(tx, "movies", nil); err != nil {
 		return err
 	}
 	
-	logger.Infof("Inserted %d movies in %d ms", len(ms), sw.ElapsedTimeMillis(true))
+	log.Infof("Inserted %d movies in %d ms", len(movies), sw.ElapsedTimeMillis(true))
 	
 	// Query movies in order to get their IDs.
-	movieTitleIdMap, err := movieTitleIdMap(tx)
+	movieTitleIdMap, err := loadMovieTitleIdMap(tx)
 	if err != nil {
 		return err
 	}
 	
 	// Bulk insert locations.
-	locationBI := NewBulkInserter(4)
+	locationInserter := NewBulkInserter(4)
 	locationCount := 0
-	for _, m := range ms {
-		mId := movieTitleIdMap[m.Title]
-		for _, l := range m.Locations {
-			locationBI.Add(nil, mId, l.Name, l.FunFact)
+	for _, movie := range movies {
+		id := movieTitleIdMap[movie.Title]
+		for _, loc := range movie.Locations {
+			locationInserter.Add(nil, id, loc.Name, loc.FunFact)
 			locationCount++
 		}
 	}
 	
-	if _, err := locationBI.Exec(tx, "locations", nil); err != nil {
+	if _, err := locationInserter.Exec(tx, "locations", nil); err != nil {
 		return err
 	}
 	
-	logger.Infof("Inserted %d locations in %d ms", locationCount, sw.ElapsedTimeMillis(true))
+	log.Infof("Inserted %d locations in %d ms", locationCount, sw.ElapsedTimeMillis(true))
 	
 	// Bulk insert actors.
 	
-	actorsBI := NewBulkInserter(2)
-	as := make(map[string]bool)
-	for _, m := range ms {
-		for _, a := range m.Actors {
-			if _, exists := as[a]; !exists {
-				as[a] = true
-				actorsBI.Add(nil, a)
+	actorInserter := NewBulkInserter(2)
+	actorNames := make(map[string]bool)
+	for _, movie := range movies {
+		for _, actorName := range movie.Actors {
+			if _, exists := actorNames[actorName]; !exists {
+				actorNames[actorName] = true
+				actorInserter.Add(nil, actorName)
 			}
 		}
 	}
 	
-	if _, err := actorsBI.Exec(tx, "actors", nil); err != nil {
+	if _, err := actorInserter.Exec(tx, "actors", nil); err != nil {
 		return err
 	}
 	
-	logger.Infof("Inserted %d actors in %d ms", len(as), sw.ElapsedTimeMillis(true))
+	log.Infof("Inserted %d actors in %d ms", len(actorNames), sw.ElapsedTimeMillis(true))
 	
 	// Query actors in order to get their IDs.
-	actorIdMap, err := actorIdMap(tx)
+	actorIdMap, err := loadActorIdMap(tx)
 	if err != nil {
 		return err
 	}
 	
 	// Bulk insert movie-actor relations.
-	relationBI := NewBulkInserter(2)
+	movieActorInserter := NewBulkInserter(2)
 	movieActorCount := 0
-	for _, m := range ms {
-		mId := movieTitleIdMap[m.Title]
-		for _, a := range m.Actors {
-			aId := actorIdMap[a]
-			relationBI.Add(mId, aId)
+	for _, movie := range movies {
+		movieId := movieTitleIdMap[movie.Title]
+		for _, actorName := range movie.Actors {
+			actorId := actorIdMap[actorName]
+			movieActorInserter.Add(movieId, actorId)
 			movieActorCount++
 		}
 	}
 	
-	if _, err := relationBI.Exec(tx, "movies_actors", nil); err != nil {
+	if _, err := movieActorInserter.Exec(tx, "movies_actors", nil); err != nil {
 		return err
 	}
 	
-	logger.Infof("Inserted %d movie-actor relations in %d ms", movieActorCount, sw.ElapsedTimeMillis(true))
+	log.Infof("Inserted %d movie-actor relations in %d ms", movieActorCount, sw.ElapsedTimeMillis(true))
 	
-	logger.Infof("Updated database in %d ms", sw.TotalElapsedTimeMillis())
+	log.Infof("Database updated in %d ms", sw.TotalElapsedTimeMillis())
 	
 	return nil
 }
 
-func movieTitleIdMap(tx *sql.Tx) (map[string]int64, error) {
+func loadMovieTitleIdMap(tx *sql.Tx) (map[string]int64, error) {
 	rows, err := tx.Query("SELECT title, id FROM movies")
 	if err != nil {
 		return nil, err
 	}
 	
-	m := make(map[string]int64)
+	movieTitleIdMap := make(map[string]int64)
 	err = forEachRow(rows, func (rows *sql.Rows) error {
 		var title string
 		var id int64
 		if err := rows.Scan(&title, &id); err != nil {
 			return err
 		}
-		m[title] = id
+		movieTitleIdMap[title] = id
 		return nil
 	})
-	return m, err
+	return movieTitleIdMap, err
 }
 
-func actorIdMap(tx *sql.Tx) (map[string]int64, error) {
+func loadActorIdMap(tx *sql.Tx) (map[string]int64, error) {
 	rows, err := tx.Query("SELECT name, id FROM actors")
 	if err != nil {
 		return nil, err
 	}
 	
-	m := make(map[string]int64)
+	actorIdMap := make(map[string]int64)
 	err = forEachRow(rows, func (rows *sql.Rows) error {
-		var name string
+		var actorName string
 		var id int64
-		if err := rows.Scan(&name, &id); err != nil {
+		if err := rows.Scan(&actorName, &id); err != nil {
 			return err
 		}
-		m[name] = id
+		actorIdMap[actorName] = id
 		return nil
 	})
-	return m, err
+	return actorIdMap, err
 }
 
-func StoreMovieInfo(db *sql.DB, movieInfo map[string]string, logger logging.Logger) error {
+func StoreMovieInfo(db *sql.DB, movieInfo map[string]string, log logging.Logger) error {
 	if len(movieInfo) == 0 {
 		return nil
 	}
 	
-	logger.Infof("Inserting %d movie infos into database", len(movieInfo))
+	sw := watch.NewStopWatch()
 	
-	return transaction(db, func (tx *sql.Tx) error {
-		sw := watch.NewStopWatch()
-		
-		bi := NewBulkInserter(2)
+	log.Infof("Inserting %d movie infos into database", len(movieInfo))
+	
+	err := transaction(db, func (tx *sql.Tx) error {
+		inserter := NewBulkInserter(2)
 		
 		for t, i := range movieInfo {
-			bi.Add(t, i)
+			inserter.Add(t, i)
 		}
 		
-		if _, err := bi.Exec(tx, "movie_info", nil); err != nil {
+		if _, err := inserter.Exec(tx, "movie_info", nil); err != nil {
 			return err
 		}
 		
-		logger.Infof("Inserted %d movie infos in %d ms", len(movieInfo), sw.TotalElapsedTimeMillis())
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	
+	log.Infof("Inserted %d movie infos in %d ms", len(movieInfo), sw.TotalElapsedTimeMillis())
+	return nil
 }
 
-func StoreCoordinates(db *sql.DB, lc map[string]*types.Coordinates, logger logging.Logger) error {
+func StoreCoordinates(db *sql.DB, lc map[string]*types.Coordinates, log logging.Logger) error {
 	if len(lc) == 0 {
 		return nil
 	}
 	
-	logger.Infof("Inserting %d location coordinates into database", len(lc))
+	sw := watch.NewStopWatch()
 	
-	return transaction(db, func (tx *sql.Tx) error {
-		sw := watch.NewStopWatch()
-		
-		bi := NewBulkInserter(3)
+	log.Infof("Inserting %d location coordinates into database", len(lc))
+	
+	err := transaction(db, func (tx *sql.Tx) error {
+		inserter := NewBulkInserter(3)
 		
 		for n, c := range lc {
 			if c == nil {
 				continue
 			}
 			
-			bi.Add(n, c.Lat, c.Lng)
+			inserter.Add(n, c.Lat, c.Lng)
 		}
 		
-		if _, err := bi.Exec(tx, "coordinates", nil); err != nil {
-			return err
-		}
-		
-		logger.Infof("Inserted %d location coordinate pairs in %d ms", len(lc), sw.TotalElapsedTimeMillis())
-		return nil
+		_, err := inserter.Exec(tx, "coordinates", nil)
+		return err
 	})
+	if err != nil {
+		return err
+	}
+	
+	log.Infof("Inserted %d location coordinate pairs in %d ms", len(lc), sw.TotalElapsedTimeMillis())
+	return nil
 }

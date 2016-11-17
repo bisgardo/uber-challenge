@@ -1,10 +1,10 @@
 package sqldb
 
 import (
+	"src/logging"
 	"database/sql"
 	"strings"
 	"fmt"
-	"src/logging"
 )
 
 func forEachRow(rows *sql.Rows, callback func(*sql.Rows) error) error {
@@ -33,10 +33,6 @@ func transaction(db *sql.DB, callback func(*sql.Tx) error) error {
 	}
 	
 	return tx.Commit()
-}
-
-func escapeSingleQuotes(s string) string {
-	return strings.Replace(s, "'", "\\'", -1)
 }
 
 type BulkInsertStmtBuilder struct {
@@ -77,14 +73,14 @@ func (b *BulkInsertStmtBuilder) build(tableName string) string {
 	return fancyRepeat("INSERT INTO " + tableName + " VALUES", prpStmtStr, b.rowCount, ",", "")
 }
 
-func (b *BulkInsertStmtBuilder) Exec(tx *sql.Tx, tableName string, logger logging.Logger) (sql.Result, error) {
+func (b *BulkInsertStmtBuilder) Exec(tx *sql.Tx, tableName string, log logging.Logger) (sql.Result, error) {
 	if len(b.values) == 0 {
 		return nil, nil
 	}
 	
 	stmt := b.build(tableName)
-	if logger != nil {
-		logger.Debugf("Executing query '%s' with values %s", stmt, fmt.Sprintln(b.values))
+	if log != nil {
+		log.Debugf("Executing query '%s' with values %s", stmt, fmt.Sprintln(b.values))
 	}
 	return tx.Exec(stmt, b.values...)
 }

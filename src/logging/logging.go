@@ -63,11 +63,11 @@ func (l *RecordingLogger) add(kind string, format string, args ...interface{}) s
 	ts := time.Now().String()
 	msg := fmt.Sprintf(format, args...)
 	
-	initString := ""
+	initStr := ""
 	if l.init {
-		initString = "[init] "
+		initStr = "[init] "
 	}
-	fullMsg := fmt.Sprintf("(%s): %s%s", ts, initString, msg)
+	fullMsg := fmt.Sprintf("(%s): %s%s", ts, initStr, msg)
 	
 	l.Entries = append(l.Entries, kind + fullMsg)
 	return fullMsg

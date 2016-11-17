@@ -10,7 +10,7 @@ import (
 
 var InitUpdateMutex = &sync.Mutex{}
 
-func Init(db *sql.DB, filename string, logger logging.Logger) (bool, error) {
+func Init(db *sql.DB, filename string, log logging.Logger) (bool, error) {
 	InitUpdateMutex.Lock()
 	defer InitUpdateMutex.Unlock()
 	
@@ -20,20 +20,20 @@ func Init(db *sql.DB, filename string, logger logging.Logger) (bool, error) {
 	}
 	
 	if alreadyInitialized {
-		logger.Infof("Database is already initialized")
+		log.Infof("Database is already initialized")
 		return false, nil
 	}
 	
 	// Database is uninitialized. Try and initialize it...
 	
-	logger.Infof("Initializing database from cached file...")
+	log.Infof("Initializing database from cached file...")
 	
-	ms, err := fetch.FetchFromFile(filename)
+	movies, err := fetch.FetchFromFile(filename)
 	if err != nil {
 		return true, err
 	}
 	
-	return true, sqldb.InitTablesAndStoreMovies(db, ms, logger)
+	return true, sqldb.InitTablesAndStoreMovies(db, movies, log)
 }
 
 func IsInitialized(db *sql.DB) (bool, error) {
