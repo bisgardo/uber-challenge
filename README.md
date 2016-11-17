@@ -32,8 +32,8 @@ is. When the `/update` endpoint is hit with a HTTP POST-request (e.g. using the 
 "original" initialization also happens if the database is suddenly empty (i.e., we can delete and recreate it from the
 console without restarting the application).
 
-The tables sizes of the SQL database and the log/error of the last (re)initialization/update are accessible on the
-"status" page.
+The sizes of the tables in the SQL database and the log/error of the last (re)initialization/update are accessible on
+the "status" page.
 
 ### Features
 
@@ -44,11 +44,11 @@ See the ["About"](https://uber-challenge-148819.appspot.com/) page of the deploy
 0.  Install the Go App Engine SDK (has batteries included) using instructions found elsewhere.
 1.  Create an App Engine trial account, give Google your credit card info, and make the sign of the cross.
 2.  Create project in the console
-3.  Create Cloud SQL instance in the [web console](https://console.cloud.google.com) . Make sure it's in the correct
+3.  Create a Cloud SQL instance in the [web console](https://console.cloud.google.com). Make sure it's in the correct
     location (cannot be changed later) and make sure that your app is authorized to access it (which it should be
     automatically).
 4.  Open the Cloud Shell (upper right corner of the console). Connect to the database using the command
-    `gcloud beta sql connect [DB-instance-ID]`. Then create the database `locations` using the MySQL command
+    `gcloud beta sql connect [DB-instance-ID] --user=root`. Then create the database `locations` using the MySQL command
     `create database locations;`.
 5.  After changing the `application` field of `app.yaml` to the ID of your project, deploy the app using the local
     command `goapp deploy`, executed from the root directory of the project. A browser window will open to log in to
@@ -63,7 +63,8 @@ Running locally:
     of the format `root:[root-password]@/locations` without any newlines (it is assumed that you connect though the
     server's root user).
 *   Obtain a API key to Google Maps and put it in a file (`res/maps-api-key`); also with no whitespace.
-*   [TODO Add description of running using `goapp` or IntelliJ with appropriate plugin(s).]
+*   Start serving the app with the command `goapp serve`. If using IntelliJ, the
+    [Go plugin](https://github.com/go-lang-plugin-org) can create a run configuration for doing this.
 
 ### Problems
 
