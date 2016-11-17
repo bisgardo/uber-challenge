@@ -8,6 +8,7 @@ import (
 )
 
 func InitTablesAndStoreMovies(db *sql.DB, movies []types.Movie, log logging.Logger) error {
+	// TODO Only apply deltas to database when it already exists.
 	return transaction(db, func (tx *sql.Tx) error {
 		if err := InitTables(tx, log); err != nil {
 			return err

@@ -88,6 +88,8 @@ be needed for the project to be production-ready.
     constraint violations in the database avoided. Also, negative lookups are not cached.
 *   Movie info data should expire such that at least ratings are updated once in a while. Also, the data is currently
     not loaded on initialization and thus requires an "update" action to be performed.
+*   Ensure that updates don't break URLs. This involves not using internal database IDs in URLs and/or only applying
+    deltas to the database when updating.
 
 ### Other ideas for future work
 
